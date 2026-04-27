@@ -6,7 +6,7 @@ export class LevelManager {
   static readonly levels: LevelInfo[] = LevelManager.parseLevels(levelsXml);
 
   private static parseLevels(xml: string): LevelInfo[] {
-    const document = new DOMParser().parseFromString(xml.replace(/^\uFEFF/, ""), "application/xml");
+    const document = new DOMParser().parseFromString(xml, "application/xml");
     const parserError = document.querySelector("parsererror");
     if (parserError !== null) {
       throw new Error("Levels.xml could not be parsed.");
