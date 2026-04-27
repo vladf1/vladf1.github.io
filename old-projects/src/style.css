@@ -27,3 +27,13 @@ canvas {
   outline: 1px solid #2f4f4f;
   background: #000;
 }
+
+footer {
+  color: #9fb5b0;
+  font: 13px Arial, sans-serif;
+  text-align: center;
+}
+
+a {
+  color: #d9ff66;
+}
