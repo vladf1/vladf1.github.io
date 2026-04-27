@@ -9,6 +9,15 @@ body {
 
 body {
   min-height: 100vh;
+  gap: 16px;
+  align-content: center;
+}
+
+h1 {
+  margin: 0;
+  color: #d9ff66;
+  font: 28px Arial, sans-serif;
+  text-align: center;
 }
 
 canvas {
