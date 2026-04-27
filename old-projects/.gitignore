@@ -7,6 +7,10 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# macOS
+.DS_Store
+._*
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -87,9 +91,11 @@ web_modules/
 .next
 out
 
-# Nuxt.js build / generate output
+# Vite / Nuxt.js build output
+.vite/
+dist/
+dist-ssr/
 .nuxt
-dist
 
 # Gatsby files
 .cache/
