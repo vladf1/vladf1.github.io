@@ -1,22 +1,41 @@
 import { LevelInfo } from "./LevelInfo";
+import levelsXml from "./Levels.xml?raw";
 import { Point } from "./Point";
 
 export class LevelManager {
-  static readonly levels: LevelInfo[] = [
-    LevelManager.create("Bellingham", 80, 10, "bbbsssttt", [[100, 0], [100, 250], [350, 250], [200, 100], [350, 100], [600, 350], [100, 350]]),
-    LevelManager.create("Everett", 65, 10, "bst", [[100, 0], [100, 300], [300, 300], [300, 150], [600, 150]]),
-    LevelManager.create("Seattle", 60, 10, "bs", [[100, 0], [100, 100], [600, 200], [150, 350]]),
-    LevelManager.create("Tacoma", 50, 10, "ttb", [[200, 0], [200, 300], [500, 300], [500, 100]]),
-    LevelManager.create("Olympia", 11, 3, "bst", [[350, 0], [350, 350]]),
-  ];
+  static readonly levels: LevelInfo[] = LevelManager.parseLevels(levelsXml);
 
-  private static create(name: string, monsterCount: number, allowEscape: number, sequence: string, points: number[][]): LevelInfo {
+  private static parseLevels(xml: string): LevelInfo[] {
+    const document = new DOMParser().parseFromString(xml, "application/xml");
+    const parserError = document.querySelector("parsererror");
+    if (parserError !== null) {
+      throw new Error("Levels.xml could not be parsed.");
+    }
+
+    const levels: LevelInfo[] = [];
+    for (const element of Array.from(document.querySelectorAll("level"))) {
+      levels.push(LevelManager.loadSingleLevel(element));
+    }
+    return levels;
+  }
+
+  private static loadSingleLevel(element: Element): LevelInfo {
     const level = new LevelInfo();
-    level.name = name;
-    level.monsterCount = monsterCount;
-    level.monstersAllowedEscape = allowEscape;
-    level.monsterSequence = sequence;
-    level.points = points.map(([x, y]) => new Point(x, y));
+    level.name = element.getAttribute("name") ?? "";
+
+    for (const point of Array.from(element.querySelectorAll("p"))) {
+      const x = Number(point.getAttribute("x"));
+      const y = Number(point.getAttribute("y"));
+      level.points.push(new Point(x, y));
+    }
+
+    const monsters = element.querySelector("monsters");
+    if (monsters !== null) {
+      level.monsterCount = Number(monsters.getAttribute("count"));
+      level.monstersAllowedEscape = Number(monsters.getAttribute("allowEscape"));
+      level.monsterSequence = monsters.textContent ?? "";
+    }
+
     return level;
   }
 }

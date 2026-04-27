@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<levels>
+
+    <level name="Bellingham">
+        <monsters count="80" allowEscape="10">bbbsssttt</monsters>
+        <points>
+            <p x="100" y="0"   />
+            <p x="100" y="250" />
+            <p x="350" y="250" />
+            <p x="200" y="100" />
+            <p x="350" y="100" />
+            <p x="600" y="350" />
+            <p x="100" y="350" />
+        </points>
+    </level>
+    
+    <level name="Everett">
+        <monsters count="65" allowEscape="10">bst</monsters>
+        <points>
+            <p x="100" y="0"   />
+            <p x="100" y="300" />
+            <p x="300" y="300" />
+            <p x="300" y="150" />
+            <p x="600" y="150" />
+        </points>
+    </level>
+    
+    <level name="Seattle">
+        <monsters count="60" allowEscape="10">bs</monsters>
+        <points>
+            <p x="100" y="0" />
+            <p x="100" y="100" />
+            <p x="600" y="200" />
+            <p x="150" y="350" />
+        </points>
+    </level>
+
+    <level name="Tacoma">
+        <monsters count="50" allowEscape="10">ttb</monsters>
+        <points>
+            <p x="200" y="0" />
+            <p x="200" y="300" />
+            <p x="500" y="300" />
+            <p x="500" y="100" />
+        </points>
+    </level>
+
+    <level name="Olympia">
+        <monsters count="11" allowEscape="3">bst</monsters>
+        <points>
+            <p x="350" y="0" />
+            <p x="350" y="350" />
+        </points>
+    </level>
+
+</levels>
