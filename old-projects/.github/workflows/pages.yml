@@ -37,12 +37,15 @@ jobs:
 
       - name: Assemble Pages artifact
         run: |
-          mkdir -p pages/balls pages/js-fireworks pages/shared pages/shoot-them-down pages/vector-defence-classic-port
+          mkdir -p pages/balls pages/click-me pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/vector-defence-classic-port
           cp index.html pages/index.html
           cp -R balls/. pages/balls/
+          cp -R click-me/. pages/click-me/
           cp -R js-fireworks/. pages/js-fireworks/
           cp -R shared/. pages/shared/
           cp -R shoot-them-down/. pages/shoot-them-down/
+          cp -R spaceship/. pages/spaceship/
+          cp -R swarm/. pages/swarm/
           cp -R vector-defence-classic-port/dist/. pages/vector-defence-classic-port/
 
       - name: Setup Pages

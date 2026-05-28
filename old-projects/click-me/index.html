@@ -1,0 +1,148 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Strict//EN"> 
+<html>
+<head>
+<title>Welcome</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
+<link rel="shortcut icon" href="../shared/favicon.ico">
+<script src="../shared/jquery-2.2.0.min.js"></script>
+<script type="text/javascript">
+    var str = "CLICK ME!";
+
+    var wh = $(window).height();
+    var ww = $(window).width();
+
+    var maxX = ww - 40;
+    var maxY = wh - 45;
+
+    function randomY() {
+        return Math.floor(Math.random() * maxY);
+    }
+
+    function randomX() {
+        return Math.floor(Math.random() * maxX);
+    }
+
+    function calcDistance(x1, y1, x2, y2) {
+        var sum = Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2);
+        return Math.sqrt(sum);
+    }
+
+    function moveAway(evt, pos, d) {
+        var distance = 150 + Math.random() * 150;
+
+        var dy = pos.top + 20 - evt.pageY;
+        var dx = pos.left + 20 - evt.pageX;
+
+        var r = Math.atan2(dy, dx); // angle in radians (Cartesian system)
+
+        var newX = pos.left + distance * Math.cos(r);
+        var newY = pos.top + distance * Math.sin(r);
+
+        newX = Math.max(newX, 0);
+        newX = Math.min(newX, maxX);
+        newY = Math.max(newY, 0);
+        newY = Math.min(newY, maxY);
+
+        d.css("background-color", "yellow");
+        d.animate({ "left": newX, "top": newY }, 800, function () { d.css("background-color", "#F9F9F9"); });
+    }
+
+    $(document).ready(function () {
+        document.body.onselectstart = function () { return false; };
+
+        var numberOfSpaces = str.match(/\s/g).length;
+        var numberOfLetters = str.length - numberOfSpaces;
+        var textWidth = numberOfLetters * 45 + numberOfSpaces * 15;
+
+        var x = (ww - textWidth) / 2;
+        x = Math.max(x, 0);
+        var posY = (wh - 40) / 2;
+
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charAt(i);
+            if (c != " ") {
+                var div = document.createElement("DIV");
+                div.className = "wheel";
+                div.innerHTML = c;
+                div.style.left = x + "px";
+                div.style.top = posY + "px";
+                div.originalLeft = x;
+                document.body.appendChild(div);
+                x += 45;
+            }
+            else {
+                x += 15;
+            }
+        }
+
+        var wheels = $("DIV.wheel");
+
+        $(document).mousemove(function (e) {
+            wheels.each(function (i, div) {
+                var d = $(div);
+                if (!d.is(':animated')) {
+                    var pos = d.position();
+                    var distance = calcDistance(e.pageX, e.pageY, pos.left + 20, pos.top + 20);
+
+                    if (distance < 100) {
+                        moveAway(e, pos, d);
+                    }
+                }
+            });
+        });
+
+
+        $(document).click(function () {
+            $("DIV.wheel:not(:animated)").each(function (i, div) {
+                $(div)
+                .animate({ "left": randomX(), "top": randomY() }, 1500)
+                .animate({ "left": div.originalLeft, "top": posY }, 900);
+            });
+        });
+
+    });
+</script>
+<style type="text/css">
+BODY
+{
+    -webkit-user-select:none;
+    -moz-user-select:none;
+}
+
+DIV.wheel
+{
+    position: absolute;
+    padding-top: 2px;
+    width: 38px;
+    height: 36px;
+    border: 1px solid red;
+    text-align: center;
+    font-size: 30px;
+    border-radius: 20px;
+    -moz-border-radius: 20px;
+    background-color: #F9F9F9;
+}
+
+
+#contactMe
+{
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    color: #808080;
+    text-decoration: none;
+    display: none;
+}
+#contactMe:hover
+{
+    color: red;
+    text-decoration: underline;
+}
+</style>
+</head>
+<body>
+
+<a id="contactMe" href="mailto:siteadmin@98.130.96.196">contact me</a>
+
+</body>
+</html>
