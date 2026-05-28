@@ -27,17 +27,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: vector-defence-classic-port/package-lock.json
+          cache-dependency-path: |
+            vector-defence-classic-port/package-lock.json
+            swarm-silverlight/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefix vector-defence-classic-port
+        run: |
+          npm ci --prefix vector-defence-classic-port
+          npm ci --prefix swarm-silverlight
 
       - name: Build
-        run: npm run build --prefix vector-defence-classic-port
+        run: |
+          npm run build --prefix vector-defence-classic-port
+          npm run build --prefix swarm-silverlight
 
       - name: Assemble Pages artifact
         run: |
-          mkdir -p pages/balls pages/click-me pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/vector-defence-classic-port
+          mkdir -p pages/balls pages/click-me pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/swarm-silverlight pages/vector-defence-classic-port
           cp index.html pages/index.html
           cp -R balls/. pages/balls/
           cp -R click-me/. pages/click-me/
@@ -46,6 +52,7 @@ jobs:
           cp -R shoot-them-down/. pages/shoot-them-down/
           cp -R spaceship/. pages/spaceship/
           cp -R swarm/. pages/swarm/
+          cp -R swarm-silverlight/dist/. pages/swarm-silverlight/
           cp -R vector-defence-classic-port/dist/. pages/vector-defence-classic-port/
 
       - name: Setup Pages
