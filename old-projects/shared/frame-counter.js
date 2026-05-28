@@ -25,4 +25,3 @@ var FrameCounter = (function () {
     };
     return FrameCounter;
 })();
-//# sourceMappingURL=frame-counter.js.map

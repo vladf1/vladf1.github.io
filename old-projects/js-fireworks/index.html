@@ -1,0 +1,43 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Fireworks!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon-precomposed" href="icons/fireworks-57.png" />
+    <link rel="apple-touch-icon-precomposed" href="icons/fireworks-72.png" sizes="72x72" />
+    <link rel="apple-touch-icon-precomposed" href="icons/fireworks-114.png" sizes="114x114" />
+
+    <script src="./fireworks.js" type="text/javascript"></script>
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+
+            margin: 0; 
+            overflow: hidden; 
+            background-color: black; 
+            color: white; 
+            text-align: center; 
+        }
+
+        #statusBar {
+            position: absolute; 
+            bottom: 1px;
+            left: 3px;
+            font: 11pt Arial;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="c">
+        Your browser does not support &lt;canvas&gt; tag. Please upgrade!
+    </canvas>
+    <div id="statusBar">Updated 05/17/2015.</div>
+</body>
+</html>

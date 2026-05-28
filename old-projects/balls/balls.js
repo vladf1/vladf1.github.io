@@ -181,4 +181,3 @@ window.onload = function () {
     game.updateScene();
     game.renderScene();
 };
-//# sourceMappingURL=balls.js.map
