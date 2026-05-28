@@ -37,8 +37,9 @@ jobs:
 
       - name: Assemble Pages artifact
         run: |
-          mkdir -p pages/vector-defence-classic-port
+          mkdir -p pages/balls pages/vector-defence-classic-port
           cp index.html pages/index.html
+          cp -R balls/. pages/balls/
           cp -R vector-defence-classic-port/dist/. pages/vector-defence-classic-port/
 
       - name: Setup Pages
