@@ -27,12 +27,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: vector-defence-classic-port/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefix vector-defence-classic-port
 
       - name: Build
-        run: npm run build
+        run: npm run build --prefix vector-defence-classic-port
+
+      - name: Assemble Pages artifact
+        run: |
+          mkdir -p pages/vector-defence-classic-port
+          cp index.html pages/index.html
+          cp -R vector-defence-classic-port/dist/. pages/vector-defence-classic-port/
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
@@ -42,7 +49,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: pages
 
   deploy:
     environment:
