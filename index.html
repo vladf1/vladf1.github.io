@@ -62,141 +62,86 @@
     <a href="https://vladf1.github.io/old-fun-projects/fireworks-silverlight-port/">fireworks</a>
     <a href="https://vladf1.github.io/old-fun-projects/vector-defence-silverlight-port/">vector defence 2010</a>
 
-    <script>
-        (function () {
-            var queues = new WeakMap();
-            var activeAnimations = new WeakMap();
+    <script type="module">
+        function swing(progress) {
+            return 0.5 - Math.cos(progress * Math.PI) / 2;
+        }
 
-            function MiniQuery(element) {
-                this.element = element;
+        function currentValue(element, property) {
+            if (property == "scrollTop") {
+                return element.scrollTop;
             }
 
-            function isAnimated(element) {
-                return (activeAnimations.get(element) || 0) > 0;
+            return parseFloat(getComputedStyle(element)[property]) || 0;
+        }
+
+        function setValue(element, property, value) {
+            if (property == "scrollTop") {
+                element.scrollTop = value;
             }
-
-            function setAnimated(element, active) {
-                var count = activeAnimations.get(element) || 0;
-                count += active ? 1 : -1;
-
-                if (count > 0) {
-                    activeAnimations.set(element, count);
-                }
-                else {
-                    activeAnimations.delete(element);
-                }
+            else {
+                element.style[property] = value + "px";
             }
+        }
 
-            function swing(progress) {
-                return 0.5 - Math.cos(progress * Math.PI) / 2;
-            }
+        function wait(duration) {
+            return new Promise(function (resolve) {
+                setTimeout(resolve, duration);
+            });
+        }
 
-            function currentValue(element, property) {
-                if (property == "scrollTop") {
-                    return element.scrollTop;
-                }
+        function runAnimation(element, properties, duration) {
+            var starts = {};
+            var changes = {};
 
-                return parseFloat(getComputedStyle(element)[property]) || 0;
-            }
+            Object.keys(properties).forEach(function (property) {
+                starts[property] = currentValue(element, property);
+                changes[property] = properties[property] - starts[property];
+            });
 
-            function setValue(element, property, value) {
-                if (property == "scrollTop") {
-                    element.scrollTop = value;
-                }
-                else {
-                    element.style[property] = value + "px";
-                }
-            }
+            return new Promise(function (resolve) {
+                var startTime = performance.now();
 
-            function wait(duration) {
-                return new Promise(function (resolve) {
-                    setTimeout(resolve, duration);
-                });
-            }
+                function tick() {
+                    var progress = Math.min((performance.now() - startTime) / duration, 1);
+                    var eased = swing(progress);
 
-            function runAnimation(element, properties, duration) {
-                var starts = {};
-                var changes = {};
-
-                Object.keys(properties).forEach(function (property) {
-                    starts[property] = currentValue(element, property);
-                    changes[property] = properties[property] - starts[property];
-                });
-
-                return new Promise(function (resolve) {
-                    var startTime = Date.now();
-
-                    function tick() {
-                        var progress = Math.min((Date.now() - startTime) / duration, 1);
-                        var eased = swing(progress);
-
-                        Object.keys(properties).forEach(function (property) {
-                            setValue(element, property, starts[property] + changes[property] * eased);
-                        });
-
-                        if (progress < 1) {
-                            setTimeout(tick, 13);
-                        }
-                        else {
-                            resolve();
-                        }
-                    }
-
-                    tick();
-                });
-            }
-
-            function enqueue(element, task) {
-                var previous = queues.get(element) || Promise.resolve();
-                var next = previous.then(task);
-
-                queues.set(element, next);
-                next.then(function () {
-                    if (queues.get(element) == next) {
-                        queues.delete(element);
-                    }
-                });
-
-                return next;
-            }
-
-            function $(value) {
-                if (value && value.nodeType) {
-                    return new MiniQuery(value);
-                }
-
-                return new MiniQuery(null);
-            }
-
-            MiniQuery.prototype.delay = function (duration) {
-                if (this.element) {
-                    enqueue(this.element, function () {
-                        return wait(duration);
+                    Object.keys(properties).forEach(function (property) {
+                        setValue(element, property, starts[property] + changes[property] * eased);
                     });
+
+                    if (progress < 1) {
+                        setTimeout(tick, 13);
+                    }
+                    else {
+                        resolve();
+                    }
                 }
 
-                return this;
-            };
+                tick();
+            });
+        }
 
-            MiniQuery.prototype.animate = function (properties, duration) {
-                if (this.element) {
-                    var element = this.element;
-                    enqueue(element, function () {
-                        setAnimated(element, true);
-                        return runAnimation(element, properties, duration).then(function () {
-                            setAnimated(element, false);
-                        });
-                    });
-                }
+        async function animate(element, properties, duration) {
+            if (element) {
+                await runAnimation(element, properties, duration);
+            }
+        }
 
-                return this;
-            };
+        async function animateIfIdle(div, action) {
+            if (div.isAnimating) {
+                return;
+            }
 
-            $.isAnimated = isAnimated;
-            window.$ = $;
-        }());
-    </script>
-    <script>
+            div.isAnimating = true;
+            try {
+                await action(div);
+            }
+            finally {
+                div.isAnimating = false;
+            }
+        }
+
         var SIZE = 90;
 
         var divSize = SIZE - 2;
@@ -292,8 +237,7 @@
 
             var wheels = document.querySelectorAll("div.wheel");
 
-            for (var i = 0; i < wheels.length; i++) {
-                var div = wheels[i];
+            async function startWheel(div) {
                 var x1 = randomOffsetX(div.originalLeft);
                 var y1 = randomOffsetY(originalTop);
 
@@ -303,28 +247,36 @@
                 var x3 = randomOffsetX(x2);
                 var y3 = randomOffsetY(y2);
 
-                $(div)
-                .delay(200)
-                .animate({ scrollTop: div.correctScroll }, 2000)
-                .delay(500)
-                .animate({ "left": x1, "top": y1 }, randomInRange(500, 1000))
-                .animate({ "left": x2, "top": y2 }, randomInRange(500, 1000))
-                .animate({ "left": x3, "top": y3 }, randomInRange(500, 1000))
-                .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000))
+                await wait(200);
+                await animate(div, { scrollTop: div.correctScroll }, 2000);
+                await wait(500);
+                await animate(div, { "left": x1, "top": y1 }, randomInRange(500, 1000));
+                await animate(div, { "left": x2, "top": y2 }, randomInRange(500, 1000));
+                await animate(div, { "left": x3, "top": y3 }, randomInRange(500, 1000));
+                await animate(div, { "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
+            }
+
+            async function scatterWheel(div) {
+                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
+                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
+                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
+                await animate(div, { "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
+            }
+
+            async function spinWheel(div) {
+                await animate(div, { scrollTop: chooseRandom(div, div.scrollTop) }, randomInRange(1000, 1500));
+                await wait(500);
+                await animate(div, { scrollTop: div.correctScroll }, randomInRange(1000, 1500));
+            }
+
+            for (var i = 0; i < wheels.length; i++) {
+                animateIfIdle(wheels[i], startWheel);
             }
 
             document.addEventListener("dblclick", function () {
                 for (var i = 0; i < wheels.length; i++) {
                     var div = wheels[i];
-                    if ($.isAnimated(div)) {
-                        continue;
-                    }
-
-                    $(div)
-                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
-                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
-                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
-                    .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
+                    animateIfIdle(div, scatterWheel);
                 }
             });
 
@@ -333,10 +285,7 @@
                 div.addEventListener("click", function (event) {
                     event.preventDefault();
                     event.stopPropagation();
-                    $(this)
-                    .animate({ scrollTop: chooseRandom(this, this.scrollTop) }, randomInRange(1000, 1500))
-                    .delay(500)
-                    .animate({ scrollTop: this.correctScroll }, randomInRange(1000, 1500));
+                    animateIfIdle(this, spinWheel);
                 });
             }
         });
