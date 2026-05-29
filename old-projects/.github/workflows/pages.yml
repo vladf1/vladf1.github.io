@@ -28,40 +28,40 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            colorful-fireworks-silverlight/package-lock.json
-            fireworks-silverlight/package-lock.json
-            vector-defence-classic-port/package-lock.json
-            swarm-silverlight/package-lock.json
+            magic-trails-silverlight-port/package-lock.json
+            fireworks-silverlight-port/package-lock.json
+            vector-defence-silverlight-port/package-lock.json
+            swarm-silverlight-port/package-lock.json
 
       - name: Install dependencies
         run: |
-          npm ci --prefix colorful-fireworks-silverlight
-          npm ci --prefix fireworks-silverlight
-          npm ci --prefix vector-defence-classic-port
-          npm ci --prefix swarm-silverlight
+          npm ci --prefix magic-trails-silverlight-port
+          npm ci --prefix fireworks-silverlight-port
+          npm ci --prefix vector-defence-silverlight-port
+          npm ci --prefix swarm-silverlight-port
 
       - name: Build
         run: |
-          npm run build --prefix colorful-fireworks-silverlight
-          npm run build --prefix fireworks-silverlight
-          npm run build --prefix vector-defence-classic-port
-          npm run build --prefix swarm-silverlight
+          npm run build --prefix magic-trails-silverlight-port
+          npm run build --prefix fireworks-silverlight-port
+          npm run build --prefix vector-defence-silverlight-port
+          npm run build --prefix swarm-silverlight-port
 
       - name: Assemble Pages artifact
         run: |
-          mkdir -p pages/balls pages/click-me pages/colorful-fireworks-silverlight pages/fireworks-silverlight pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/swarm-silverlight pages/vector-defence-classic-port
+          mkdir -p pages/balls pages/click-me pages/magic-trails-silverlight-port pages/fireworks-silverlight-port pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/swarm-silverlight-port pages/vector-defence-silverlight-port
           cp index.html pages/index.html
           cp -R balls/. pages/balls/
           cp -R click-me/. pages/click-me/
-          cp -R colorful-fireworks-silverlight/dist/. pages/colorful-fireworks-silverlight/
-          cp -R fireworks-silverlight/dist/. pages/fireworks-silverlight/
+          cp -R magic-trails-silverlight-port/dist/. pages/magic-trails-silverlight-port/
+          cp -R fireworks-silverlight-port/dist/. pages/fireworks-silverlight-port/
           cp -R js-fireworks/. pages/js-fireworks/
           cp -R shared/. pages/shared/
           cp -R shoot-them-down/. pages/shoot-them-down/
           cp -R spaceship/. pages/spaceship/
           cp -R swarm/. pages/swarm/
-          cp -R swarm-silverlight/dist/. pages/swarm-silverlight/
-          cp -R vector-defence-classic-port/dist/. pages/vector-defence-classic-port/
+          cp -R swarm-silverlight-port/dist/. pages/swarm-silverlight-port/
+          cp -R vector-defence-silverlight-port/dist/. pages/vector-defence-silverlight-port/
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

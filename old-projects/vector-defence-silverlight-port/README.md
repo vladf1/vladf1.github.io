@@ -4,7 +4,7 @@ Modern TypeScript canvas port of the original Silverlight `VectorDefenceSL` proj
 
 ## Play
 
-Play the game here: [https://vladf1.github.io/old-fun-projects/vector-defence-classic-port/](https://vladf1.github.io/old-fun-projects/vector-defence-classic-port/)
+Play the game here: [https://vladf1.github.io/old-fun-projects/vector-defence-silverlight-port/](https://vladf1.github.io/old-fun-projects/vector-defence-silverlight-port/)
 
 ## Requirements
 

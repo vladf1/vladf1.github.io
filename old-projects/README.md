@@ -4,10 +4,10 @@ Collection of older personal projects and modern browser ports.
 
 ## Projects
 
-- [Colorful Fireworks Silverlight Port](https://vladf1.github.io/old-fun-projects/colorful-fireworks-silverlight/)
-- [Fireworks Silverlight Port](https://vladf1.github.io/old-fun-projects/fireworks-silverlight/)
-- [Swarm Silverlight Port](https://vladf1.github.io/old-fun-projects/swarm-silverlight/)
-- [Vector Defence Classic Port](https://vladf1.github.io/old-fun-projects/vector-defence-classic-port/)
+- [Magic Trails Silverlight Port](https://vladf1.github.io/old-fun-projects/magic-trails-silverlight-port/)
+- [Fireworks Silverlight Port](https://vladf1.github.io/old-fun-projects/fireworks-silverlight-port/)
+- [Swarm Silverlight Port](https://vladf1.github.io/old-fun-projects/swarm-silverlight-port/)
+- [Vector Defence Silverlight Port](https://vladf1.github.io/old-fun-projects/vector-defence-silverlight-port/)
 
 ## Build
 
