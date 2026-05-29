@@ -90,7 +90,7 @@
             });
         }
 
-        function runAnimation(element, properties, duration) {
+        function animate(element, properties, duration) {
             var starts = {};
             var changes = {};
 
@@ -120,12 +120,6 @@
 
                 tick();
             });
-        }
-
-        async function animate(element, properties, duration) {
-            if (element) {
-                await runAnimation(element, properties, duration);
-            }
         }
 
         async function animateIfIdle(div, action) {
