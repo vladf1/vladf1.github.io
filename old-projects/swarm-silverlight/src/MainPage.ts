@@ -29,7 +29,7 @@ export class MainPage {
   private lastAnimated = 0;
   private lastTimed = performance.now();
   private framesRendered = 0;
-  private fps = 0;
+  private fps: number | null = null;
   private sprites: Sprite[] | null = null;
   private height = 0;
   private width = 0;
@@ -55,7 +55,7 @@ export class MainPage {
     this.canvas.setAttribute("aria-label", "Pretty Swarm canvas");
     this.spritesText = document.createElement("div");
     this.spritesText.id = "spritesText";
-    this.spritesText.textContent = "  ";
+    this.spritesText.hidden = true;
     root.append(this.canvas, this.spritesText, this.controls);
 
     const context = this.canvas.getContext("2d", { alpha: false });
@@ -115,7 +115,8 @@ export class MainPage {
       this.context.putImageData(this.bmp, 0, 0);
     }
 
-    this.spritesText.textContent = `FPS: ${this.fps}, Sprites: ${this.numberOfSprites}, Mode: ${this.renderMode}`;
+    this.spritesText.hidden = this.fps === null;
+    this.spritesText.textContent = this.fps === null ? "" : `FPS: ${this.fps}`;
     this.framesRendered++;
     this.animationFrame = requestAnimationFrame(this.RenderFrame);
   };
@@ -211,8 +212,11 @@ export class MainPage {
     controls.id = "swarmControls";
 
     const modeGroup = document.createElement("fieldset");
+    modeGroup.className = "btn-group";
+    modeGroup.setAttribute("aria-label", "Mode");
     const modeLegend = document.createElement("legend");
-    modeLegend.textContent = "Render";
+    modeLegend.className = "sr-only";
+    modeLegend.textContent = "Mode";
     modeGroup.append(modeLegend);
 
     const pixelInput = this.createModeInput("pixels", "Pixels");
@@ -227,7 +231,7 @@ export class MainPage {
     spriteInput.type = "number";
     spriteInput.min = "10";
     spriteInput.max = "5000";
-    spriteInput.step = "10";
+    spriteInput.step = "100";
     spriteInput.value = String(this.numberOfSprites);
     spriteInput.addEventListener("change", () => {
       this.setNumberOfSprites(spriteInput.value);
@@ -249,14 +253,7 @@ export class MainPage {
     });
     fadeLabel.append(fadeText, fadeInput);
 
-    const resetButton = document.createElement("button");
-    resetButton.type = "button";
-    resetButton.textContent = "Reset";
-    resetButton.addEventListener("click", () => {
-      this.recreateSprites();
-    });
-
-    controls.append(modeGroup, spriteLabel, fadeLabel, resetButton);
+    controls.append(modeGroup, spriteLabel, fadeLabel);
 
     return {
       controls,
@@ -333,7 +330,7 @@ export class MainPage {
     this.lastAnimated = 0;
     this.lastTimed = performance.now();
     this.framesRendered = 0;
-    this.fps = 0;
+    this.fps = null;
   }
 
   private writeConfigToUrl(): void {
