@@ -28,25 +28,33 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
+            colorful-fireworks-silverlight/package-lock.json
+            fireworks-silverlight/package-lock.json
             vector-defence-classic-port/package-lock.json
             swarm-silverlight/package-lock.json
 
       - name: Install dependencies
         run: |
+          npm ci --prefix colorful-fireworks-silverlight
+          npm ci --prefix fireworks-silverlight
           npm ci --prefix vector-defence-classic-port
           npm ci --prefix swarm-silverlight
 
       - name: Build
         run: |
+          npm run build --prefix colorful-fireworks-silverlight
+          npm run build --prefix fireworks-silverlight
           npm run build --prefix vector-defence-classic-port
           npm run build --prefix swarm-silverlight
 
       - name: Assemble Pages artifact
         run: |
-          mkdir -p pages/balls pages/click-me pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/swarm-silverlight pages/vector-defence-classic-port
+          mkdir -p pages/balls pages/click-me pages/colorful-fireworks-silverlight pages/fireworks-silverlight pages/js-fireworks pages/shared pages/shoot-them-down pages/spaceship pages/swarm pages/swarm-silverlight pages/vector-defence-classic-port
           cp index.html pages/index.html
           cp -R balls/. pages/balls/
           cp -R click-me/. pages/click-me/
+          cp -R colorful-fireworks-silverlight/dist/. pages/colorful-fireworks-silverlight/
+          cp -R fireworks-silverlight/dist/. pages/fireworks-silverlight/
           cp -R js-fireworks/. pages/js-fireworks/
           cp -R shared/. pages/shared/
           cp -R shoot-them-down/. pages/shoot-them-down/
