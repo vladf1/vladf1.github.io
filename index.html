@@ -62,7 +62,140 @@
     <a href="https://vladf1.github.io/old-fun-projects/fireworks-silverlight-port/">fireworks</a>
     <a href="https://vladf1.github.io/old-fun-projects/vector-defence-silverlight-port/">vector defence 2010</a>
 
-    <script src="mini-query.min.js"></script>
+    <script>
+        (function () {
+            var queues = new WeakMap();
+            var activeAnimations = new WeakMap();
+
+            function MiniQuery(element) {
+                this.element = element;
+            }
+
+            function isAnimated(element) {
+                return (activeAnimations.get(element) || 0) > 0;
+            }
+
+            function setAnimated(element, active) {
+                var count = activeAnimations.get(element) || 0;
+                count += active ? 1 : -1;
+
+                if (count > 0) {
+                    activeAnimations.set(element, count);
+                }
+                else {
+                    activeAnimations.delete(element);
+                }
+            }
+
+            function swing(progress) {
+                return 0.5 - Math.cos(progress * Math.PI) / 2;
+            }
+
+            function currentValue(element, property) {
+                if (property == "scrollTop") {
+                    return element.scrollTop;
+                }
+
+                return parseFloat(getComputedStyle(element)[property]) || 0;
+            }
+
+            function setValue(element, property, value) {
+                if (property == "scrollTop") {
+                    element.scrollTop = value;
+                }
+                else {
+                    element.style[property] = value + "px";
+                }
+            }
+
+            function wait(duration) {
+                return new Promise(function (resolve) {
+                    setTimeout(resolve, duration);
+                });
+            }
+
+            function runAnimation(element, properties, duration) {
+                var starts = {};
+                var changes = {};
+
+                Object.keys(properties).forEach(function (property) {
+                    starts[property] = currentValue(element, property);
+                    changes[property] = properties[property] - starts[property];
+                });
+
+                return new Promise(function (resolve) {
+                    var startTime = Date.now();
+
+                    function tick() {
+                        var progress = Math.min((Date.now() - startTime) / duration, 1);
+                        var eased = swing(progress);
+
+                        Object.keys(properties).forEach(function (property) {
+                            setValue(element, property, starts[property] + changes[property] * eased);
+                        });
+
+                        if (progress < 1) {
+                            setTimeout(tick, 13);
+                        }
+                        else {
+                            resolve();
+                        }
+                    }
+
+                    tick();
+                });
+            }
+
+            function enqueue(element, task) {
+                var previous = queues.get(element) || Promise.resolve();
+                var next = previous.then(task);
+
+                queues.set(element, next);
+                next.then(function () {
+                    if (queues.get(element) == next) {
+                        queues.delete(element);
+                    }
+                });
+
+                return next;
+            }
+
+            function $(value) {
+                if (value && value.nodeType) {
+                    return new MiniQuery(value);
+                }
+
+                return new MiniQuery(null);
+            }
+
+            MiniQuery.prototype.delay = function (duration) {
+                if (this.element) {
+                    enqueue(this.element, function () {
+                        return wait(duration);
+                    });
+                }
+
+                return this;
+            };
+
+            MiniQuery.prototype.animate = function (properties, duration) {
+                if (this.element) {
+                    var element = this.element;
+                    enqueue(element, function () {
+                        setAnimated(element, true);
+                        return runAnimation(element, properties, duration).then(function () {
+                            setAnimated(element, false);
+                        });
+                    });
+                }
+
+                return this;
+            };
+
+            $.isAnimated = isAnimated;
+            window.$ = $;
+        }());
+    </script>
     <script>
         var SIZE = 90;
 
@@ -77,8 +210,8 @@
         var letterHeight = SIZE + 2;
         var str = "HI  THERE!!";
 
-        var wh = $(window).height();
-        var ww = $(window).width();
+        var wh = window.innerHeight;
+        var ww = window.innerWidth;
 
 
         function randomInRange(minVal, maxVal) {
@@ -120,7 +253,7 @@
             return scrollTo;
         }
 
-        $(document).ready(function () {
+        document.addEventListener("DOMContentLoaded", function () {
             document.body.onselectstart = function () { return false; };
 
             var numberOfSpaces = str.match(/\s/g).length;
@@ -157,9 +290,10 @@
                 }
             }
 
-            var wheels = $("div.wheel");
+            var wheels = document.querySelectorAll("div.wheel");
 
-            wheels.each(function (i, div) {
+            for (var i = 0; i < wheels.length; i++) {
+                var div = wheels[i];
                 var x1 = randomOffsetX(div.originalLeft);
                 var y1 = randomOffsetY(originalTop);
 
@@ -177,25 +311,34 @@
                 .animate({ "left": x2, "top": y2 }, randomInRange(500, 1000))
                 .animate({ "left": x3, "top": y3 }, randomInRange(500, 1000))
                 .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000))
-            });
+            }
 
-            $(document).dblclick(function () {
-                $("div.wheel:not(:animated)").each(function (i, div) {
+            document.addEventListener("dblclick", function () {
+                for (var i = 0; i < wheels.length; i++) {
+                    var div = wheels[i];
+                    if ($.isAnimated(div)) {
+                        continue;
+                    }
+
                     $(div)
                     .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
                     .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
                     .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
                     .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
-                });
+                }
             });
 
-            wheels.click(function () {
-                $(this)
-                .animate({ scrollTop: chooseRandom(this, this.scrollTop) }, randomInRange(1000, 1500))
-                .delay(500)
-                .animate({ scrollTop: this.correctScroll }, randomInRange(1000, 1500));
-                return false;
-            });
+            for (var i = 0; i < wheels.length; i++) {
+                var div = wheels[i];
+                div.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    $(this)
+                    .animate({ scrollTop: chooseRandom(this, this.scrollTop) }, randomInRange(1000, 1500))
+                    .delay(500)
+                    .animate({ scrollTop: this.correctScroll }, randomInRange(1000, 1500));
+                });
+            }
         });
     </script>
 </body>
