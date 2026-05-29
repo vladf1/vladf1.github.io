@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <link rel="shortcut icon" href="favicon.ico">
+    <style type="text/css">
+        BODY {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            font-family: Sans-Serif;
+        }
+
+        .wheel {
+            cursor: default;
+            overflow: hidden;
+            position: absolute;
+        }
+
+            .wheel DIV {
+                border: 1px solid red;
+                text-align: center;
+                margin-right: 1px;
+                margin-bottom: 2px;
+                border-radius: 10px;
+                background-color: #F9F9F9;
+            }
+
+        h3 {
+            margin: 10px;
+        }
+
+        a {
+            font-size: 11pt;
+            margin: 0 10px;
+            color: #808080;
+            text-decoration: none;
+        }
+
+            a:hover {
+                color: red;
+                text-decoration: underline;
+            }
+    </style>
+</head>
+<body>
+    <h3>TypeScript using HTML5 canvas</h3>
+
+    <a href="Balls.html">balls</a>
+    <a href="Swarm.html">swarm 1</a>
+    <a href="Fireworks.html">fireworks 1</a>
+    <a href="Fireworks.1.5.html">fireworks 1.5</a>
+    <a href="Spaceship.html">spaceship</a>
+    <a href="ShootThemDown.html">shoot them down!</a>
+    <a href="https://vladf1.github.io/vector-defence-2026/">vector defence 2026</a>
+    <br />
+
+
+    <h3>Silverlight (these may not work on newer browsers. Try IE / Edge)</h3>
+
+    <a href="SwarmSilverlight-shapes.html">swarm 1</a>
+    <a href="SwarmSilverlight-lines.html">swarm 2</a>
+    <a href="FireworksSilverlight-shapes.html">fireworks 1</a>
+    <a href="FireworksSilverlight-sprites.html">fireworks 2</a>
+    <a href="VectorDefenseSL.html">vector defense</a>
+
+    <script src="Scripts/jquery-2.2.0.min.js"></script>
+    <script>
+        var SIZE = 90;
+
+        var divSize = SIZE - 2;
+        var allLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ?!";
+        var html = "";
+        for (var i = 0; i < allLetters.length; i++) {
+            var h = "<div style='height: " + divSize + "px; width: " + divSize + "px; font-size: " + (SIZE - 9) + "px;'>" + allLetters.charAt(i) + "</div>";
+            html += h;
+        }
+
+        var letterHeight = SIZE + 2;
+        var str = "HI  THERE!!";
+
+        var wh = $(window).height();
+        var ww = $(window).width();
+
+
+        function randomInRange(minVal, maxVal) {
+            return minVal + (Math.random() * (maxVal - minVal));
+        }
+
+        function randomY() {
+            return Math.floor(Math.random() * (wh - SIZE));
+        }
+
+        function randomX() {
+            return Math.floor(Math.random() * (ww - SIZE));
+        }
+
+        function randomOffsetX(n) {
+            var v = randomInRange(n - 200, n + 200);
+            if (v > ww - SIZE)
+                v = ww - SIZE - 2;
+            if (v < 2)
+                v = 2;
+            return v;
+        }
+
+        function randomOffsetY(n) {
+            var v = randomInRange(n - 200, n + 200);
+            if (v > wh - SIZE)
+                v = wh - SIZE - 2;
+            if (v < 2)
+                v = 2;
+            return v;
+        }
+
+        function chooseRandom(div, excludedValue) {
+            var scrollTo;
+            do {
+                scrollTo = Math.floor(Math.random() * allLetters.length) * letterHeight;
+            }
+            while (scrollTo == excludedValue);
+            return scrollTo;
+        }
+
+        $(document).ready(function () {
+            document.body.onselectstart = function () { return false; };
+
+            var numberOfSpaces = str.match(/\s/g).length;
+            var numberOfLetters = str.length - numberOfSpaces;
+            var textWidth = numberOfLetters * (SIZE + 5) + numberOfSpaces * 15;
+
+            var x = (ww - textWidth) / 2;
+            if (x < 0) {
+                x = 0;
+            }
+            var originalTop = (wh - SIZE) / 2;
+
+            for (var i = 0; i < str.length; i++) {
+                var c = str.charAt(i);
+                if (c != " ") {
+                    var div = document.createElement("DIV");
+                    div.className = "wheel";
+                    div.style.height = SIZE + "px";
+                    div.innerHTML = html; // add letters
+                    div.correctScroll = allLetters.indexOf(c) * letterHeight;
+
+                    div.style.left = x + "px";
+                    div.style.top = originalTop + "px";
+                    div.originalLeft = x;
+
+                    document.body.appendChild(div);
+
+                    div.scrollTop = chooseRandom(div, div.correctScroll);   // scroll to the correct letter
+
+                    x += (SIZE + 5);
+                }
+                else {
+                    x += 15;
+                }
+            }
+
+            var wheels = $("div.wheel");
+
+            wheels.each(function (i, div) {
+                var x1 = randomOffsetX(div.originalLeft);
+                var y1 = randomOffsetY(originalTop);
+
+                var x2 = randomOffsetX(x1);
+                var y2 = randomOffsetY(y1);
+
+                var x3 = randomOffsetX(x2);
+                var y3 = randomOffsetY(y2);
+
+                $(div)
+                .delay(200)
+                .animate({ scrollTop: div.correctScroll }, 2000)
+                .delay(500)
+                .animate({ "left": x1, "top": y1 }, randomInRange(500, 1000))
+                .animate({ "left": x2, "top": y2 }, randomInRange(500, 1000))
+                .animate({ "left": x3, "top": y3 }, randomInRange(500, 1000))
+                .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000))
+            });
+
+            $(document).dblclick(function () {
+                $("div.wheel:not(:animated)").each(function (i, div) {
+                    $(div)
+                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
+                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
+                    .animate({ "left": randomX(), "top": randomY() }, randomInRange(500, 1000))
+                    .animate({ "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
+                });
+            });
+
+            wheels.click(function () {
+                $(this)
+                .animate({ scrollTop: chooseRandom(this, this.scrollTop) }, randomInRange(1000, 1500))
+                .delay(500)
+                .animate({ scrollTop: this.correctScroll }, randomInRange(1000, 1500));
+                return false;
+            });
+        });
+    </script>
+</body>
+</html>
