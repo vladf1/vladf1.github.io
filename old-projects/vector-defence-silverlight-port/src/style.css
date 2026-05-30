@@ -1,0 +1,39 @@
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #101414;
+  display: grid;
+  place-items: center;
+}
+
+body {
+  min-height: 100vh;
+  gap: 16px;
+  align-content: center;
+}
+
+h1 {
+  margin: 0;
+  color: #d9ff66;
+  font: 28px Arial, sans-serif;
+  text-align: center;
+}
+
+canvas {
+  width: 700px;
+  height: 520px;
+  image-rendering: auto;
+  outline: 1px solid #2f4f4f;
+  background: #000;
+}
+
+footer {
+  color: #9fb5b0;
+  font: 13px Arial, sans-serif;
+  text-align: center;
+}
+
+a {
+  color: #d9ff66;
+}

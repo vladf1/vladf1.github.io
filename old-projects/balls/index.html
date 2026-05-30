@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Balls on the &lt;canvas&gt; tag</title>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <meta name="viewport" content="width=device-width, initial-scale = 1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <script src="../shared/frame-counter.js"></script>
+    <script src="./balls.js"></script>
+    
+    <style type="text/css">
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+            color: white;
+            font-family: sans-serif;
+        }
+
+        #statusBar {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas">
+        Your browser does not support the CANVAS tag. Sorry! Please use Firefox or Chrome or Safari or Opera or IE 9.
+    </canvas>
+    <div id="statusBar">Bouncing balls on HTML5 canvas. TypeScript, no external libraries.</div>
+</body>
+</html>
+
+
