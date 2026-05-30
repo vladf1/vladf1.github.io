@@ -1,4 +1,3 @@
-import "./style.css";
 import { Page } from "./Page";
 
 const root = document.querySelector<HTMLElement>("#root");
