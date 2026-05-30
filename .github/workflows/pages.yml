@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - codex/import-old-projects
   workflow_dispatch:
 
 permissions:
