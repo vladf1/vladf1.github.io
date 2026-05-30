@@ -18,3 +18,13 @@ https://vladf1.github.io/old-projects/
 ```
 
 Project builds are copied into matching subdirectories in the Pages artifact.
+
+The Silverlight TypeScript ports share one Vite and TypeScript toolchain from this
+folder:
+
+```bash
+npm install
+npm run build
+```
+
+That command writes each port's production output to its own `dist/` folder.

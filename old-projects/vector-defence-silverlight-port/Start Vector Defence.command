@@ -2,7 +2,7 @@
 
 set -u
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 PORT=4177
 while lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; do
@@ -22,7 +22,7 @@ if [ ! -d node_modules ]; then
   echo
 fi
 
-npm run dev -- --host 127.0.0.1 --port "$PORT" --strictPort &
+npm run dev:vector-defence -- --host 127.0.0.1 --port "$PORT" --strictPort &
 SERVER_PID=$!
 
 cleanup() {

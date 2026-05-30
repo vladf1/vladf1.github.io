@@ -1,0 +1,22 @@
+{
+  "name": "old-projects",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:fireworks": "vite fireworks-silverlight-port --host 127.0.0.1 --config vite.config.ts",
+    "dev:magic-trails": "vite magic-trails-silverlight-port --host 127.0.0.1 --config vite.config.ts",
+    "dev:swarm": "vite swarm-silverlight-port --host 127.0.0.1 --config vite.config.ts",
+    "dev:vector-defence": "vite vector-defence-silverlight-port --host 127.0.0.1 --config vite.config.ts",
+    "build": "tsc -p tsconfig.json && npm run build:ports",
+    "build:ports": "npm run build:fireworks && npm run build:magic-trails && npm run build:swarm && npm run build:vector-defence",
+    "build:fireworks": "vite build fireworks-silverlight-port --config vite.config.ts",
+    "build:magic-trails": "vite build magic-trails-silverlight-port --config vite.config.ts",
+    "build:swarm": "vite build swarm-silverlight-port --config vite.config.ts",
+    "build:vector-defence": "vite build vector-defence-silverlight-port --config vite.config.ts"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

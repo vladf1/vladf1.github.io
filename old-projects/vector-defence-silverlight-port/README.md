@@ -14,13 +14,15 @@ Play the game here: [https://vladf1.github.io/old-projects/vector-defence-silver
 ## Install
 
 ```bash
+cd ..
 npm install
 ```
 
 ## Run Locally
 
 ```bash
-npm run dev
+cd ..
+npm run dev:vector-defence
 ```
 
 Vite will print the local URL. By default, it runs on `http://127.0.0.1:5173/` unless that port is already in use or you pass a different one.
@@ -28,7 +30,8 @@ Vite will print the local URL. By default, it runs on `http://127.0.0.1:5173/` u
 To run on the port used during development:
 
 ```bash
-npm run dev -- --port 4177
+cd ..
+npm run dev:vector-defence -- --port 4177
 ```
 
 Then open:
@@ -40,7 +43,8 @@ http://127.0.0.1:4177/
 ## Build
 
 ```bash
-npm run build
+cd ..
+npm run build:vector-defence
 ```
 
 The production build is written to `dist/`.
