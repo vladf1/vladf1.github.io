@@ -1,24 +1,24 @@
 ﻿(function () {
-    var NUMBER_OF_SPRITES = 160, TIME_BETWEEN_FRAMES = 8,
+    const NUMBER_OF_SPRITES = 160, TIME_BETWEEN_FRAMES = 8,
     MIN_COLOR = 40, MAX_VELOCITY = 6,
     MAX_OFFSET_AMOUNT = 10, TOO_FAR = 450, MIN_DISTANCE = 200,
     MAX_RANDOM_ANGLE_CHANGE = 1.5, MAX_CRAZINESS = .1, CHANGE_DIRECTION_FRAMES = 10;
 
-    var bubbles = [];
-    var ctx;
+    const bubbles = [];
+    let ctx;
 
     function Bubble(x, y) {
-        var dr = randomNonZeroIntInRange(-2, 3); // random change change of colors
-        var db = randomNonZeroIntInRange(-2, 2);
-        var dg = randomNonZeroIntInRange(-3, 2);
-        var speed = MAX_VELOCITY * randomInRange(.4, 1);
-        var craziness = randomInRange(0, MAX_CRAZINESS);
-        var offsetX = randomInRange(-MAX_OFFSET_AMOUNT, MAX_OFFSET_AMOUNT);
-        var offsetY = randomInRange(-MAX_OFFSET_AMOUNT, MAX_OFFSET_AMOUNT);
-        var gravityDistance = MIN_DISTANCE * randomInRange(.6, 1.5);
+        let dr = randomNonZeroIntInRange(-2, 3); // random change change of colors
+        let db = randomNonZeroIntInRange(-2, 2);
+        let dg = randomNonZeroIntInRange(-3, 2);
+        const speed = MAX_VELOCITY * randomInRange(.4, 1);
+        const craziness = randomInRange(0, MAX_CRAZINESS);
+        const offsetX = randomInRange(-MAX_OFFSET_AMOUNT, MAX_OFFSET_AMOUNT);
+        const offsetY = randomInRange(-MAX_OFFSET_AMOUNT, MAX_OFFSET_AMOUNT);
+        const gravityDistance = MIN_DISTANCE * randomInRange(.6, 1.5);
 
-        var angle = randomInRange(0, Math.PI * 2); // randomize direction:
-        var dx, dy;
+        let angle = randomInRange(0, Math.PI * 2); // randomize direction:
+        let dx, dy;
 
         this.calcVector = function () {
             dx = speed * Math.cos(angle);
@@ -27,15 +27,15 @@
 
         this.calcVector();
 
-        var r = randomNonZeroIntInRange(MIN_COLOR, 255);
-        var g = randomNonZeroIntInRange(MIN_COLOR, 255);
-        var b = randomNonZeroIntInRange(MIN_COLOR, 255);
+        let r = randomNonZeroIntInRange(MIN_COLOR, 255);
+        let g = randomNonZeroIntInRange(MIN_COLOR, 255);
+        let b = randomNonZeroIntInRange(MIN_COLOR, 255);
 
-        var moveAwayTicks = 0;
-        var angleChangeTicks = 0, dAngle = null;
+        let moveAwayTicks = 0;
+        let angleChangeTicks = 0, dAngle = null;
 
         this.startMovingAway = function () {
-            var dist = calcDistance(x, y, ctx.pointerX, ctx.pointerY);
+            const dist = calcDistance(x, y, ctx.pointerX, ctx.pointerY);
             if (dist < gravityDistance) {
                 moveAwayTicks = 100;
                 r = 255;
@@ -46,7 +46,7 @@
 
         this.animate = function () {
             if (ctx.pointerY && ctx.pointerX) {
-                var dist = calcDistance(x, y, ctx.pointerX, ctx.pointerY);
+                const dist = calcDistance(x, y, ctx.pointerX, ctx.pointerY);
 
                 if (moveAwayTicks > 0) { // repelling move
                     if (dist < gravityDistance) {
@@ -59,26 +59,26 @@
                 else { // attraction mode
                     if (dist > gravityDistance && dist < TOO_FAR) {
                         angleChangeTicks = 5;
-                        var newAngle = Math.atan2(ctx.pointerY - y + offsetY, ctx.pointerX - x + offsetX);
+                        let newAngle = Math.atan2(ctx.pointerY - y + offsetY, ctx.pointerX - x + offsetX);
                         newAngle = normalizeAngle(newAngle);
                         dAngle = difBetweenAngles(newAngle, angle) / angleChangeTicks;
                     }
                 }
             }
 
-            if (angleChangeTicks == 0 && Math.random() < craziness) {
-                var angleChange = randomInRange(-MAX_RANDOM_ANGLE_CHANGE, MAX_RANDOM_ANGLE_CHANGE);
+            if (angleChangeTicks === 0 && Math.random() < craziness) {
+                const angleChange = randomInRange(-MAX_RANDOM_ANGLE_CHANGE, MAX_RANDOM_ANGLE_CHANGE);
                 dAngle = angleChange / CHANGE_DIRECTION_FRAMES;
                 angleChangeTicks = CHANGE_DIRECTION_FRAMES;
             }
-            if (angleChangeTicks != 0) {
+            if (angleChangeTicks !== 0) {
                 angle += dAngle;
                 angle = normalizeAngle(angle);
                 this.calcVector();
                 angleChangeTicks--;
             }
 
-            var bounced = false;
+            let bounced = false;
             if (y + dy < 0) {
                 y = 0;
                 dy *= -1;
@@ -108,7 +108,7 @@
             y += dy; // move
             x += dx;
 
-            if (moveAwayTicks == 0) {
+            if (moveAwayTicks === 0) {
                 if (r >= 255 || r <= MIN_COLOR) {
                     dr *= -1;
                 }
@@ -134,7 +134,7 @@
 
         this.draw = function () {
             ctx.lineTo(x, y);
-            ctx.strokeStyle = "rgb(" + r + "," + g + "," + b + ")";
+            ctx.strokeStyle = `rgb(${r},${g},${b})`;
             ctx.stroke();
             ctx.closePath();
         }
@@ -145,60 +145,57 @@
         ctx.lineWidth = 5;
         ctx.lineCap = "round";
 
-        for (var i = 0; i < bubbles.length; i++) {
-            var b = bubbles[i];
-            b.savePosition();
-            b.animate();
-            b.draw();
+        for (const bubble of bubbles) {
+            bubble.savePosition();
+            bubble.animate();
+            bubble.draw();
         }
         FrameCounter.showFps(ctx);
 
         setTimeout(renderFrame, TIME_BETWEEN_FRAMES);
     }
 
-    function start() {
-        var canvas = document.getElementById("c");
+    document.addEventListener("DOMContentLoaded", () => {
+        const canvas = document.getElementById("c");
         if (!canvas.getContext)
             return;
 
         ctx = canvas.getContext("2d");
 
-        window.onresize = function () {
+        window.onresize = () => {
             canvas.height = document.documentElement.clientHeight;
             canvas.width = Math.min(1200, document.documentElement.clientWidth);
         };
         window.onresize();
 
-        for (var i = 0; i < NUMBER_OF_SPRITES; i++) {
-            var startPosX = randomInRange(MAX_VELOCITY, ctx.canvas.width - MAX_VELOCITY);
-            var startPosY = randomInRange(MAX_VELOCITY, ctx.canvas.height - MAX_VELOCITY);
+        for (let i = 0; i < NUMBER_OF_SPRITES; i++) {
+            const startPosX = randomInRange(MAX_VELOCITY, ctx.canvas.width - MAX_VELOCITY);
+            const startPosY = randomInRange(MAX_VELOCITY, ctx.canvas.height - MAX_VELOCITY);
             bubbles.push(new Bubble(startPosX, startPosY));
         }
 
-        canvas.addEventListener("mousemove", function (e) {
+        canvas.addEventListener("mousemove", (e) => {
             ctx.pointerX = e.pageX;
             ctx.pointerY = e.pageY;
         });
 
-        canvas.addEventListener("mouseout", function () {
+        canvas.addEventListener("mouseout", () => {
             ctx.pointerX = ctx.pointerY = null;
         });
 
-        canvas.addEventListener("click", function (e) {
-            var replaceSprites = parseInt(NUMBER_OF_SPRITES / 10);
+        canvas.addEventListener("click", (e) => {
+            const replaceSprites = Math.floor(NUMBER_OF_SPRITES / 10);
             bubbles.splice(0, replaceSprites);
-            for (var i = 0; i < replaceSprites; i++) {
+            for (let i = 0; i < replaceSprites; i++) {
                 bubbles.push(new Bubble(e.pageX + randomInRange(-1, 1), e.pageY + randomInRange(-1, 1)));
             }
 
-            for (var i = 0; i < bubbles.length; i++) {
-                bubbles[i].startMovingAway();
+            for (const bubble of bubbles) {
+                bubble.startMovingAway();
             }
         });
 
         FrameCounter.startTimer();
         renderFrame();
-    }
-
-    document.addEventListener("DOMContentLoaded", start);
+    });
 })();
