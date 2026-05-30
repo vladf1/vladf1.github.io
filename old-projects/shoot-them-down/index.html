@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shot Them Down!</title>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <meta name="viewport" content="width=1300">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="shortcut icon" href="../shared/favicon.ico">
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -o-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            margin: 10px;
+            background-color: black;
+            min-width: 1200px;
+            font-family: sans-serif;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        label span {
+            margin-left: 5px;
+        }
+
+        #infoContainer {
+            color: #cccccc;
+            font: 11pt Arial;
+            padding: 10px;
+            margin-right: 10px;
+            width: 115px;
+        }
+
+        #infoContainer, canvas {
+            float: left;
+            border: 1px solid #aaaaaa;
+        }
+
+        input[type="checkbox"] {
+            margin: 0 2px 5px 0;
+        }
+
+        h2 {
+            color: #eeeeee;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Shot Them Down!</h2>
+
+<div id="infoContainer">
+    <label>Shots: <span id="bulletsFired">0</span></label>
+    <label>Kills: <span id="shipsKilled">0</span></label>
+    <label>Frames / s: <span id="framesPerSecond">0</span></label>
+    <label>Updates / s: <span id="updatesPerSecond">0</span></label>
+    <label>Sprites: <span id="spritesTracked">0</span></label>
+    <br/>
+    <br/>
+    <label><input type="checkbox" id="enableFadingObjects"/> Motion Blur</label>
+    <label><input type="checkbox" id="enableShaking"/> Shake</label>
+    <label><input type="checkbox" id="enableEpilepsy"/> Epilepsy</label>
+    <label><input type="checkbox" id="enableParticles" checked="checked"/> Particles</label>
+</div>
+
+<canvas id="gameCanvas" width="1024" height="768"></canvas>
+
+<script src="../shared/jquery-2.2.0.min.js"></script>
+<script src="../shared/frame-counter.js"></script>
+<script src="./game.js"></script>
+</body>
+</html>
