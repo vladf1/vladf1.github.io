@@ -156,7 +156,7 @@
         setTimeout(renderFrame, TIME_BETWEEN_FRAMES);
     }
 
-    $(document).ready(function () {
+    function start() {
         var canvas = document.getElementById("c");
         if (!canvas.getContext)
             return;
@@ -175,16 +175,16 @@
             bubbles.push(new Bubble(startPosX, startPosY));
         }
 
-        $(canvas).mousemove(function (e) {
+        canvas.addEventListener("mousemove", function (e) {
             ctx.pointerX = e.pageX;
             ctx.pointerY = e.pageY;
         });
 
-        $(canvas).mouseout(function () {
+        canvas.addEventListener("mouseout", function () {
             ctx.pointerX = ctx.pointerY = null;
         });
 
-        $(canvas).click(function (e) {
+        canvas.addEventListener("click", function (e) {
             var replaceSprites = parseInt(NUMBER_OF_SPRITES / 10);
             bubbles.splice(0, replaceSprites);
             for (var i = 0; i < replaceSprites; i++) {
@@ -198,5 +198,7 @@
 
         FrameCounter.startTimer();
         renderFrame();
-    });
+    }
+
+    document.addEventListener("DOMContentLoaded", start);
 })();
