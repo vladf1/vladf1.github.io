@@ -27,25 +27,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            magic-trails-silverlight-port/package-lock.json
-            fireworks-silverlight-port/package-lock.json
-            vector-defence-silverlight-port/package-lock.json
-            swarm-silverlight-port/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: |
-          npm ci --prefix magic-trails-silverlight-port
-          npm ci --prefix fireworks-silverlight-port
-          npm ci --prefix vector-defence-silverlight-port
-          npm ci --prefix swarm-silverlight-port
+        run: npm ci
 
-      - name: Build
-        run: |
-          npm run build --prefix magic-trails-silverlight-port
-          npm run build --prefix fireworks-silverlight-port
-          npm run build --prefix vector-defence-silverlight-port
-          npm run build --prefix swarm-silverlight-port
+      - name: Build TypeScript ports
+        run: npm run build
 
       - name: Assemble Pages artifact
         run: |
