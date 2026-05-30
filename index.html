@@ -1,288 +1,579 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Welcome</title>
-    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>fridman.me</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="shortcut icon" href="favicon.ico">
-    <style type="text/css">
-        BODY {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            font-family: Sans-Serif;
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #0d0f12;
+            --line: #d8dce2;
+            --paper: #fbfcfd;
+            --red: #ff4d3f;
+            --blue: #1fb6ff;
+            --green: #29bf57;
+            --yellow: #f7bf18;
+            --shadow: 0 18px 34px rgba(15, 20, 30, 0.13);
         }
 
-        .wheel {
-            cursor: default;
-            overflow: hidden;
-            position: absolute;
+        * {
+            box-sizing: border-box;
         }
 
-            .wheel DIV {
-                border: 1px solid red;
-                text-align: center;
-                margin-right: 1px;
-                margin-bottom: 2px;
-                border-radius: 10px;
-                background-color: #F9F9F9;
-            }
-
-        h3 {
-            margin: 10px;
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--ink);
+            background:
+                linear-gradient(90deg, rgba(13, 15, 18, 0.045) 1px, transparent 1px),
+                linear-gradient(rgba(13, 15, 18, 0.045) 1px, transparent 1px),
+                radial-gradient(circle at 50% 18%, #ffffff 0, var(--paper) 48%, #eef2f6 100%);
+            background-size: 56px 56px, 56px 56px, auto;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
         }
 
         a {
-            font-size: 11pt;
-            margin: 0 10px;
-            color: #808080;
+            color: inherit;
             text-decoration: none;
         }
 
-            a:hover {
-                color: red;
-                text-decoration: underline;
+        a:focus-visible,
+        button:focus-visible {
+            outline: 3px solid rgba(31, 182, 255, 0.4);
+            outline-offset: 4px;
+        }
+
+        .page {
+            width: min(100% - 36px, 1180px);
+            margin: 0 auto;
+        }
+
+        .hero {
+            min-height: 0;
+            display: grid;
+            place-items: center;
+            padding: clamp(24px, 3.2vw, 42px) 0 clamp(28px, 3.6vw, 48px);
+            text-align: center;
+        }
+
+        .kinetic-word {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: clamp(7px, 0.95vw, 12px);
+            width: 100%;
+            min-height: clamp(80px, 11vw, 140px);
+        }
+
+        .word-space {
+            flex: 0 0 clamp(14px, 3vw, 36px);
+            height: 1px;
+        }
+
+        .letter-slot {
+            --slot-size: clamp(54px, 7.2vw, 92px);
+            width: var(--slot-size);
+            height: calc(var(--slot-size) * 1.42);
+            padding: 0;
+            border: 2px solid var(--ink);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.88);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            transform: translate3d(0, 0, 0) rotate(var(--angle, 0deg));
+            transition: transform 380ms ease, box-shadow 240ms ease, border-color 240ms ease;
+        }
+
+        .letter-slot::before,
+        .letter-slot::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            z-index: 2;
+            height: 26%;
+            pointer-events: none;
+        }
+
+        .letter-slot::before {
+            top: 0;
+            background: linear-gradient(#ffffff 8%, rgba(255, 255, 255, 0.55), transparent);
+        }
+
+        .letter-slot::after {
+            bottom: 0;
+            background: linear-gradient(transparent, rgba(255, 255, 255, 0.62), #ffffff 92%);
+        }
+
+        .letter-slot:hover {
+            border-color: var(--accent, var(--red));
+            box-shadow: 0 20px 38px rgba(15, 20, 30, 0.18);
+            transform: translateY(-6px) rotate(var(--angle, 0deg));
+        }
+
+        .letter-slot.is-floating {
+            transform: translate(var(--float-x), var(--float-y)) rotate(var(--angle, 0deg));
+            transition: transform 900ms ease-in-out, box-shadow 240ms ease, border-color 240ms ease;
+        }
+
+        .letter-slot.is-spinning .reel {
+            filter: blur(1.2px);
+        }
+
+        .reel {
+            display: flex;
+            flex-direction: column;
+            transform: translateY(var(--reel-y, 0));
+            transition: transform var(--spin-time, 1200ms) cubic-bezier(0.2, 0.82, 0.23, 1);
+            will-change: transform;
+        }
+
+        .reel span {
+            display: grid;
+            place-items: center;
+            height: calc(var(--slot-size) * 1.42);
+            color: var(--accent, var(--ink));
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: calc(var(--slot-size) * 0.86);
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .reel span.is-target {
+            color: var(--ink);
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: minmax(220px, 0.82fr) repeat(2, minmax(0, 1fr));
+            gap: clamp(32px, 4.2vw, 58px);
+            padding: 0 0 clamp(46px, 8vw, 86px);
+        }
+
+        .project-list h2,
+        .notes h2 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(13, 15, 18, 0.28);
+            font-size: clamp(1.28rem, 1rem + 1vw, 1.75rem);
+            line-height: 1.15;
+            letter-spacing: 0;
+        }
+
+        .project-note {
+            min-height: 78px;
+            margin: 12px 0 8px;
+            color: #20252b;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: clamp(0.82rem, 0.76rem + 0.18vw, 0.92rem);
+            line-height: 1.55;
+        }
+
+        .section-mark {
+            color: var(--red);
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-weight: 900;
+        }
+
+        .project-list.is-new .section-mark {
+            color: var(--green);
+        }
+
+        .project-list.is-ports .section-mark {
+            color: var(--blue);
+        }
+
+        .project-list ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .project-list li {
+            border-bottom: 1px solid var(--line);
+        }
+
+        .project-list a {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+            min-height: 58px;
+            color: var(--ink);
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: clamp(0.97rem, 0.86rem + 0.35vw, 1.15rem);
+            transition: background 160ms ease, transform 160ms ease;
+        }
+
+        .project-list a:hover {
+            background: rgba(255, 255, 255, 0.62);
+            transform: translateX(4px);
+        }
+
+        .project-list a::after {
+            content: "->";
+            color: var(--ink);
+            font-weight: 900;
+        }
+
+        .project-icon {
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            color: var(--project-color);
+        }
+
+        .project-icon svg {
+            width: 28px;
+            height: 28px;
+            display: block;
+        }
+
+        .notes {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: clamp(42px, 6vw, 78px);
+            padding: 34px 0 76px;
+            border-top: 1px solid rgba(13, 15, 18, 0.18);
+        }
+
+        .notes h2 {
+            border: 0;
+            padding: 0;
+            margin-bottom: 14px;
+        }
+
+        .notes p,
+        .notes li {
+            color: #20252b;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: clamp(0.88rem, 0.82rem + 0.2vw, 0.98rem);
+            line-height: 1.7;
+        }
+
+        .notes p {
+            margin: 0;
+        }
+
+        .notes ul {
+            margin: 0;
+            padding-left: 1.15rem;
+        }
+
+        .notes li::marker {
+            color: var(--ink);
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        @media (max-width: 820px) {
+            .page {
+                width: min(100% - 24px, 1180px);
             }
+
+            .hero {
+                min-height: auto;
+                padding: 30px 0 44px;
+            }
+
+            .kinetic-word {
+                justify-content: flex-start;
+                min-height: 172px;
+            }
+
+            .project-grid,
+            .notes {
+                grid-template-columns: 1fr;
+                gap: 34px;
+            }
+
+            .project-note {
+                min-height: 0;
+            }
+
+            .notes {
+                padding-bottom: 48px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .kinetic-word {
+                gap: 6px;
+            }
+
+            .word-space {
+                flex-basis: 100%;
+                height: 0;
+            }
+
+            .letter-slot {
+                --slot-size: clamp(40px, 14vw, 56px);
+            }
+
+            .project-list a {
+                grid-template-columns: 34px minmax(0, 1fr) auto;
+                gap: 10px;
+                min-height: 54px;
+            }
+
+            .project-icon {
+                width: 28px;
+                height: 28px;
+            }
+
+            .project-icon svg {
+                width: 24px;
+                height: 24px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
-    <h3>TypeScript using HTML5 canvas</h3>
+    <div class="page">
+        <main>
+            <section class="hero" aria-labelledby="hero-title">
+                <h1 id="hero-title" class="sr-only">Make it move</h1>
+                <div id="kinetic-word" class="kinetic-word" data-phrase="MAKE IT MOVE" aria-hidden="true"></div>
+            </section>
 
-    <a href="old-projects/balls/">balls</a>
-    <a href="old-projects/swarm/">swarm</a>
-    <a href="old-projects/js-fireworks/">fireworks</a>
-    <a href="old-projects/spaceship/">spaceship</a>
-    <a href="old-projects/shoot-them-down/">shoot them down!</a>
-    <a href="https://vladf1.github.io/vector-defence-2026/">vector defence 2026</a>
-    <br />
+            <section class="project-grid" aria-label="Project links">
+                <article class="project-list is-new">
+                    <h2><span class="section-mark" aria-hidden="true">++</span> New Fun with AI</h2>
+                    <p class="project-note">Old Silverlight projects that no longer run as-is, ported to TypeScript with AI assistance and then updated further.</p>
+                    <ul>
+                        <li><a href="https://vladf1.github.io/vector-defence-2026/" style="--project-color: var(--green)"><span class="project-icon" aria-hidden="true" data-icon="shield"></span><span>Vector defence 2026</span></a></li>
+                    </ul>
+                </article>
 
+                <article class="project-list is-canvas">
+                    <h2><span class="section-mark" aria-hidden="true">&lt;/&gt;</span> Canvas Experiments</h2>
+                    <p class="project-note">Old-school JavaScript experiments, mostly unchanged from the 2010s.</p>
+                    <ul>
+                        <li><a href="old-projects/balls/" style="--project-color: var(--blue)"><span class="project-icon" aria-hidden="true" data-icon="balls"></span><span>Balls</span></a></li>
+                        <li><a href="old-projects/swarm/" style="--project-color: var(--green)"><span class="project-icon" aria-hidden="true" data-icon="swarm"></span><span>Swarm</span></a></li>
+                        <li><a href="old-projects/js-fireworks/" style="--project-color: var(--yellow)"><span class="project-icon" aria-hidden="true" data-icon="fireworks"></span><span>Fireworks</span></a></li>
+                        <li><a href="old-projects/spaceship/" style="--project-color: var(--blue)"><span class="project-icon" aria-hidden="true" data-icon="ship"></span><span>Spaceship</span></a></li>
+                        <li><a href="old-projects/shoot-them-down/" style="--project-color: var(--red)"><span class="project-icon" aria-hidden="true" data-icon="target"></span><span>Shoot them down!</span></a></li>
+                    </ul>
+                </article>
 
-    <h3>Silverlight to TypeScript ports</h3>
+                <article class="project-list is-ports">
+                    <h2><span class="section-mark" aria-hidden="true">C:\&gt;</span> TypeScript Ports</h2>
+                    <p class="project-note">AI-assisted Silverlight-to-TypeScript ports, written to preserve the original 2010 C# shape and feel.</p>
+                    <ul>
+                        <li><a href="old-projects/swarm-silverlight-port/" style="--project-color: var(--green)"><span class="project-icon" aria-hidden="true" data-icon="swarm"></span><span>Swarm</span></a></li>
+                        <li><a href="old-projects/magic-trails-silverlight-port/" style="--project-color: var(--yellow)"><span class="project-icon" aria-hidden="true" data-icon="trail"></span><span>Magic trails</span></a></li>
+                        <li><a href="old-projects/fireworks-silverlight-port/" style="--project-color: var(--red)"><span class="project-icon" aria-hidden="true" data-icon="fireworks"></span><span>Fireworks</span></a></li>
+                        <li><a href="old-projects/vector-defence-silverlight-port/" style="--project-color: #2f72ff"><span class="project-icon" aria-hidden="true" data-icon="shield"></span><span>Vector defence 2010</span></a></li>
+                    </ul>
+                </article>
+            </section>
 
-    <a href="old-projects/swarm-silverlight-port/">swarm</a>
-    <a href="old-projects/magic-trails-silverlight-port/">magic trails</a>
-    <a href="old-projects/fireworks-silverlight-port/">fireworks</a>
-    <a href="old-projects/vector-defence-silverlight-port/">vector defence 2010</a>
+            <section class="notes" aria-label="About this archive">
+                <article>
+                    <h2><span class="section-mark" aria-hidden="true">/*</span> About <span class="section-mark" aria-hidden="true">*/</span></h2>
+                    <p>This is a collection of small browser experiments and Silverlight-era projects. Some are preserved snapshots; some have been rebuilt so they can run again.</p>
+                </article>
+
+                <article>
+                    <h2><span class="section-mark" aria-hidden="true">//</span> Notes <span class="section-mark" aria-hidden="true">//</span></h2>
+                    <ul>
+                        <li>Old code is intentionally allowed to look old.</li>
+                        <li>Ports favor fidelity over a modern rewrite style.</li>
+                        <li>Newer updates keep the original character visible.</li>
+                    </ul>
+                </article>
+            </section>
+        </main>
+    </div>
 
     <script type="module">
-        function swing(progress) {
-            return 0.5 - Math.cos(progress * Math.PI) / 2;
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ?!#/";
+        const accents = ["var(--blue)", "var(--red)", "var(--yellow)", "var(--green)", "#8c9eff"];
+        const word = document.getElementById("kinetic-word");
+        const phrase = word.dataset.phrase;
+        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const icons = {
+            balls: '<circle cx="8" cy="8" r="3" fill="currentColor"/><circle cx="19" cy="11" r="3.2" fill="currentColor"/><circle cx="12" cy="21" r="3.5" fill="currentColor"/>',
+            swarm: '<circle cx="14" cy="4" r="2" fill="currentColor"/><circle cx="7" cy="9" r="2" fill="currentColor"/><circle cx="21" cy="9" r="2" fill="currentColor"/><circle cx="5" cy="17" r="2" fill="currentColor"/><circle cx="14" cy="15" r="2" fill="currentColor"/><circle cx="23" cy="17" r="2" fill="currentColor"/><circle cx="9" cy="24" r="2" fill="currentColor"/><circle cx="19" cy="24" r="2" fill="currentColor"/>',
+            fireworks: '<path d="M14 3v8M14 17v8M3 14h8M17 14h8M6.2 6.2l5.5 5.5M16.3 16.3l5.5 5.5M21.8 6.2l-5.5 5.5M11.7 16.3l-5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="14" cy="14" r="2.5" fill="currentColor"/>',
+            ship: '<path d="M14 3 5 25l9-5 9 5L14 3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 10v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+            target: '<circle cx="14" cy="14" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="14" cy="14" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 1v6M14 21v6M1 14h6M21 14h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+            shield: '<path d="M14 3 23 6v7c0 6.5-3.7 10.5-9 12-5.3-1.5-9-5.5-9-12V6l9-3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 9v9M10 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+            trail: '<path d="M5 21c8-2 13-7 15-15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="7" cy="8" r="1.7" fill="currentColor"/><circle cx="13" cy="5" r="1.4" fill="currentColor"/><circle cx="20" cy="13" r="1.6" fill="currentColor"/>'
+        };
+
+        for (const holder of document.querySelectorAll("[data-icon]")) {
+            holder.innerHTML = `<svg viewBox="0 0 28 28" role="img" focusable="false">${icons[holder.dataset.icon]}</svg>`;
         }
 
-        function currentValue(element, property) {
-            if (property == "scrollTop") {
-                return element.scrollTop;
+        function makeSequence(target) {
+            const result = [];
+            const targetIndex = 9 + Math.floor(Math.random() * 4);
+
+            for (let i = 0; i < targetIndex; i++) {
+                result.push(letters[Math.floor(Math.random() * letters.length)]);
             }
 
-            return parseFloat(getComputedStyle(element)[property]) || 0;
-        }
+            result.push(target);
 
-        function setValue(element, property, value) {
-            if (property == "scrollTop") {
-                element.scrollTop = value;
+            for (let i = 0; i < 3; i++) {
+                result.push(letters[Math.floor(Math.random() * letters.length)]);
             }
-            else {
-                element.style[property] = value + "px";
+
+            return { result, targetIndex };
+        }
+
+        function buildSlot(char, index) {
+            const button = document.createElement("button");
+            const reel = document.createElement("span");
+            const sequence = makeSequence(char);
+
+            button.type = "button";
+            button.className = "letter-slot";
+            button.ariaLabel = `Spin letter ${char}`;
+            button.style.setProperty("--accent", accents[index % accents.length]);
+            button.style.setProperty("--angle", `${(index % 2 ? 1 : -1) * (Math.random() * 1.8).toFixed(2)}deg`);
+            button.dataset.targetIndex = sequence.targetIndex;
+
+            reel.className = "reel";
+
+            for (const letter of sequence.result) {
+                const span = document.createElement("span");
+                span.textContent = letter;
+                if (letter === char && reel.children.length === sequence.targetIndex) {
+                    span.className = "is-target";
+                }
+                reel.appendChild(span);
             }
+
+            button.appendChild(reel);
+            button.addEventListener("click", () => spinSlot(button, true));
+            return button;
         }
 
-        function wait(duration) {
-            return new Promise(function (resolve) {
-                setTimeout(resolve, duration);
-            });
-        }
-
-        function animate(element, properties, duration) {
-            var starts = {};
-            var changes = {};
-
-            Object.keys(properties).forEach(function (property) {
-                starts[property] = currentValue(element, property);
-                changes[property] = properties[property] - starts[property];
-            });
-
-            return new Promise(function (resolve) {
-                var startTime = performance.now();
-
-                function tick() {
-                    var progress = Math.min((performance.now() - startTime) / duration, 1);
-                    var eased = swing(progress);
-
-                    Object.keys(properties).forEach(function (property) {
-                        setValue(element, property, starts[property] + changes[property] * eased);
-                    });
-
-                    if (progress < 1) {
-                        setTimeout(tick, 13);
-                    }
-                    else {
-                        resolve();
-                    }
+        function layoutPhrase() {
+            let letterIndex = 0;
+            for (const char of phrase) {
+                if (char === " ") {
+                    const spacer = document.createElement("span");
+                    spacer.className = "word-space";
+                    word.appendChild(spacer);
+                    continue;
                 }
 
-                tick();
-            });
+                word.appendChild(buildSlot(char, letterIndex));
+                letterIndex++;
+            }
         }
 
-        async function animateIfIdle(div, action) {
-            if (div.isAnimating) {
+        function spinSlot(slot, playful) {
+            if (prefersReducedMotion || slot.classList.contains("is-spinning")) {
                 return;
             }
 
-            div.isAnimating = true;
-            try {
-                await action(div);
-            }
-            finally {
-                div.isAnimating = false;
-            }
-        }
+            const targetIndex = Number(slot.dataset.targetIndex);
+            const reel = slot.querySelector(".reel");
+            const reelCount = reel.children.length;
+            let randomIndex;
 
-        var SIZE = 90;
-
-        var divSize = SIZE - 2;
-        var allLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ?!";
-        var html = "";
-        for (var i = 0; i < allLetters.length; i++) {
-            var h = "<div style='height: " + divSize + "px; width: " + divSize + "px; font-size: " + (SIZE - 9) + "px;'>" + allLetters.charAt(i) + "</div>";
-            html += h;
-        }
-
-        var letterHeight = SIZE + 2;
-        var str = "HI  THERE!!";
-
-        var wh = window.innerHeight;
-        var ww = window.innerWidth;
-
-
-        function randomInRange(minVal, maxVal) {
-            return minVal + (Math.random() * (maxVal - minVal));
-        }
-
-        function randomY() {
-            return Math.floor(Math.random() * (wh - SIZE));
-        }
-
-        function randomX() {
-            return Math.floor(Math.random() * (ww - SIZE));
-        }
-
-        function randomOffsetX(n) {
-            var v = randomInRange(n - 200, n + 200);
-            if (v > ww - SIZE)
-                v = ww - SIZE - 2;
-            if (v < 2)
-                v = 2;
-            return v;
-        }
-
-        function randomOffsetY(n) {
-            var v = randomInRange(n - 200, n + 200);
-            if (v > wh - SIZE)
-                v = wh - SIZE - 2;
-            if (v < 2)
-                v = 2;
-            return v;
-        }
-
-        function chooseRandom(div, excludedValue) {
-            var scrollTo;
             do {
-                scrollTo = Math.floor(Math.random() * allLetters.length) * letterHeight;
+                randomIndex = Math.floor(Math.random() * reelCount);
             }
-            while (scrollTo == excludedValue);
-            return scrollTo;
-        }
+            while (randomIndex === targetIndex);
 
-        document.addEventListener("DOMContentLoaded", function () {
-            document.body.onselectstart = function () { return false; };
+            slot.classList.add("is-spinning");
+            slot.style.setProperty("--spin-time", `${playful ? 820 : 1450 + Math.random() * 620}ms`);
 
-            var numberOfSpaces = str.match(/\s/g).length;
-            var numberOfLetters = str.length - numberOfSpaces;
-            var textWidth = numberOfLetters * (SIZE + 5) + numberOfSpaces * 15;
-
-            var x = (ww - textWidth) / 2;
-            if (x < 0) {
-                x = 0;
-            }
-            var originalTop = (wh - SIZE) / 2;
-
-            for (var i = 0; i < str.length; i++) {
-                var c = str.charAt(i);
-                if (c != " ") {
-                    var div = document.createElement("DIV");
-                    div.className = "wheel";
-                    div.style.height = SIZE + "px";
-                    div.innerHTML = html; // add letters
-                    div.correctScroll = allLetters.indexOf(c) * letterHeight;
-
-                    div.style.left = x + "px";
-                    div.style.top = originalTop + "px";
-                    div.originalLeft = x;
-
-                    document.body.appendChild(div);
-
-                    div.scrollTop = chooseRandom(div, div.correctScroll);   // scroll to the correct letter
-
-                    x += (SIZE + 5);
-                }
-                else {
-                    x += 15;
-                }
+            if (playful) {
+                reel.style.transition = "none";
+                reel.style.setProperty("--reel-y", `calc(var(--slot-size) * -1.42 * ${randomIndex})`);
+                reel.offsetHeight;
+                reel.style.transition = "";
             }
 
-            var wheels = document.querySelectorAll("div.wheel");
-
-            async function startWheel(div) {
-                var x1 = randomOffsetX(div.originalLeft);
-                var y1 = randomOffsetY(originalTop);
-
-                var x2 = randomOffsetX(x1);
-                var y2 = randomOffsetY(y1);
-
-                var x3 = randomOffsetX(x2);
-                var y3 = randomOffsetY(y2);
-
-                await wait(200);
-                await animate(div, { scrollTop: div.correctScroll }, 2000);
-                await wait(500);
-                await animate(div, { "left": x1, "top": y1 }, randomInRange(500, 1000));
-                await animate(div, { "left": x2, "top": y2 }, randomInRange(500, 1000));
-                await animate(div, { "left": x3, "top": y3 }, randomInRange(500, 1000));
-                await animate(div, { "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
-            }
-
-            async function scatterWheel(div) {
-                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
-                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
-                await animate(div, { "left": randomX(), "top": randomY() }, randomInRange(500, 1000));
-                await animate(div, { "left": div.originalLeft, "top": originalTop }, randomInRange(500, 1000));
-            }
-
-            async function spinWheel(div) {
-                await animate(div, { scrollTop: chooseRandom(div, div.scrollTop) }, randomInRange(1000, 1500));
-                await wait(500);
-                await animate(div, { scrollTop: div.correctScroll }, randomInRange(1000, 1500));
-            }
-
-            for (var i = 0; i < wheels.length; i++) {
-                animateIfIdle(wheels[i], startWheel);
-            }
-
-            document.addEventListener("dblclick", function () {
-                for (var i = 0; i < wheels.length; i++) {
-                    var div = wheels[i];
-                    animateIfIdle(div, scatterWheel);
-                }
+            requestAnimationFrame(() => {
+                reel.style.setProperty("--reel-y", `calc(var(--slot-size) * -1.42 * ${targetIndex})`);
             });
 
-            for (var i = 0; i < wheels.length; i++) {
-                var div = wheels[i];
-                div.addEventListener("click", function (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    animateIfIdle(this, spinWheel);
-                });
+            if (playful) {
+                const floatX = Math.round(Math.random() * 46 - 23);
+                const floatY = Math.round(Math.random() * 30 - 15);
+                slot.style.setProperty("--float-x", `${floatX}px`);
+                slot.style.setProperty("--float-y", `${floatY}px`);
+                slot.classList.add("is-floating");
+                window.setTimeout(() => slot.classList.remove("is-floating"), 440);
             }
-        });
+
+            window.setTimeout(() => slot.classList.remove("is-spinning"), playful ? 920 : 2200);
+        }
+
+        function shuffleSlots() {
+            const slots = [...document.querySelectorAll(".letter-slot")].map(slot => ({
+                slot,
+                home: slot.getBoundingClientRect()
+            }));
+
+            for (const { slot, home } of slots) {
+                for (let hop = 0; hop < 4; hop++) {
+                    window.setTimeout(() => {
+                        const margin = Math.max(home.width, home.height) / 2 + 16;
+                        const targetX = margin + Math.random() * Math.max(1, window.innerWidth - margin * 2);
+                        const targetY = margin + Math.random() * Math.max(1, window.innerHeight - margin * 2);
+
+                        slot.style.setProperty("--float-x", `${Math.round(targetX - home.left - home.width / 2)}px`);
+                        slot.style.setProperty("--float-y", `${Math.round(targetY - home.top - home.height / 2)}px`);
+                        slot.classList.add("is-floating");
+                    }, hop * 920);
+                }
+
+                window.setTimeout(() => slot.classList.remove("is-floating"), 4020 + Math.random() * 320);
+            }
+        }
+
+        layoutPhrase();
+
+        if (!prefersReducedMotion) {
+            const slots = [...document.querySelectorAll(".letter-slot")];
+            slots.forEach((slot, index) => {
+                window.setTimeout(() => spinSlot(slot, false), 130 + index * 95);
+            });
+
+            document.addEventListener("dblclick", shuffleSlots);
+        }
     </script>
 </body>
 </html>
