@@ -4,6 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Colourful Firework</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #101414;
+        color: white;
+      }
+
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      #LayoutRoot {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: black;
+        touch-action: none;
+        user-select: none;
+      }
+
+      #ColorfulFireworks {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: transparent;
+      }
+
+      #Cover {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: black;
+        cursor: pointer;
+      }
+
+      #CoverText {
+        color: #f4ff28;
+        font:
+          700 48px Verdana,
+          sans-serif;
+        text-shadow: 0 0 10px rgba(244, 255, 40, 0.45);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
