@@ -1,0 +1,15 @@
+﻿<UserControl x:Class="VectorDefenceSL.LevelSelector"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" Width="400" d:DesignHeight="300">
+    
+    <UserControl.Resources>
+        <Storyboard x:Name="fadeDialogStoryboard" Completed="HideAnimation_Completed">
+            <DoubleAnimation Duration="0:0:.5" Storyboard.TargetName="border" Storyboard.TargetProperty="Opacity" From="1"  To="0" />
+        </Storyboard>
+    </UserControl.Resources>
+    <Border Name="border" BorderBrush="SteelBlue" BorderThickness="2" HorizontalAlignment="Stretch" Margin="0" VerticalAlignment="Stretch" CornerRadius="10" Background="Black">
+        <StackPanel Name="stackPanel" Margin="0,30,0,15" />
+    </Border>
+</UserControl>
