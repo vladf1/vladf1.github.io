@@ -21,23 +21,31 @@
         touch-action: none;
       }
 
-      button {
+      #hint {
         position: fixed;
         inset: 0;
-        border: 0;
-        background: transparent;
+        display: grid;
+        place-items: center;
         color: #7df9ff;
         font: 700 48px "Avenir Next", "Segoe UI", Verdana, sans-serif;
-        cursor: pointer;
+        pointer-events: none;
         text-shadow:
           0 0 10px rgb(125 249 255 / 65%),
           0 0 28px rgb(255 79 216 / 35%);
+        transition:
+          opacity 2.5s ease,
+          transform 2.5s ease;
+      }
+
+      #hint.is-fading {
+        opacity: 0;
+        transform: translateY(60px);
       }
     </style>
   </head>
   <body>
     <canvas id="trails"></canvas>
-    <button id="cover">Click to Start</button>
+    <div id="hint">Move the pointer to start</div>
     <script src="./magic-trails.js"></script>
   </body>
 </html>

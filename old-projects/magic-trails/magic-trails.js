@@ -3,7 +3,7 @@
 // https://web.archive.org/web/20080923132130/http://www.shinedraw.com/animation-effect/flash-vs-silverlight-colorful-fireworks/
 
 const canvas = document.querySelector("#trails");
-const cover = document.querySelector("#cover");
+const hint = document.querySelector("#hint");
 const context = canvas.getContext("2d");
 let dots = [];
 
@@ -21,6 +21,7 @@ addEventListener("resize", resizeCanvas);
 
 canvas.addEventListener("pointermove", (event) => {
   const maxVelocity = 5;
+  hint.classList.add("is-fading");
 
   for (let i = 0; i < 2; i++) {
     dots.push({
@@ -35,27 +36,23 @@ canvas.addEventListener("pointermove", (event) => {
   }
 });
 
-cover.addEventListener("click", () => {
-  cover.remove();
+setInterval(() => {
+  context.clearRect(0, 0, innerWidth, innerHeight);
 
-  setInterval(() => {
-    context.clearRect(0, 0, innerWidth, innerHeight);
+  for (const dot of dots) {
+    dot.opacity -= 0.015;
+    dot.yVelocity += 0.5;
+    dot.x += dot.xVelocity;
+    dot.y += dot.yVelocity;
 
-    for (const dot of dots) {
-      dot.opacity -= 0.015;
-      dot.yVelocity += 0.5;
-      dot.x += dot.xVelocity;
-      dot.y += dot.yVelocity;
-
-      for (let i = 0; i < 5; i++) {
-        context.globalAlpha = i ? Math.max(0, dot.opacity * (0.75 - 0.15 * i)) : dot.opacity;
-        context.fillStyle = i ? dot.color : "white";
-        context.beginPath();
-        context.arc(dot.x, dot.y, (dot.size * 2 ** Math.max(0, i - 1)) / 2, 0, Math.PI * 2);
-        context.fill();
-      }
+    for (let i = 0; i < 5; i++) {
+      context.globalAlpha = i ? Math.max(0, dot.opacity * (0.75 - 0.15 * i)) : dot.opacity;
+      context.fillStyle = i ? dot.color : "white";
+      context.beginPath();
+      context.arc(dot.x, dot.y, (dot.size * 2 ** Math.max(0, i - 1)) / 2, 0, Math.PI * 2);
+      context.fill();
     }
+  }
 
-    dots = dots.filter(d => d.opacity > 0.1);
-  }, 1000 / 24); // 24 fps
-});
+  dots = dots.filter(d => d.opacity > 0.1);
+}, 1000 / 24); // 24 fps
