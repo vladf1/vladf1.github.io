@@ -3,13 +3,13 @@
 Personal GitHub Pages site for [vladf1.github.io](https://vladf1.github.io/).
 
 The root page is a small static homepage with links to older browser projects,
-canvas experiments, and TypeScript ports of old Silverlight projects.
+canvas experiments, rebuilds, and TypeScript ports of old Silverlight projects.
 
 ## Structure
 
 - `index.html` - the root homepage.
 - `favicon.ico` - site icon.
-- `old-projects/` - archived browser projects and TypeScript canvas ports.
+- `old-projects/` - archived browser projects, rebuilds, and TypeScript canvas ports.
 
 ## Projects
 
@@ -18,10 +18,10 @@ The homepage links to:
 - `old-projects/balls/`
 - `old-projects/swarm/`
 - `old-projects/js-fireworks/`
+- `old-projects/magic-trails/`
 - `old-projects/spaceship/`
 - `old-projects/shoot-them-down/`
 - `old-projects/swarm-silverlight-port/`
-- `old-projects/magic-trails-silverlight-port/`
 - `old-projects/fireworks-silverlight-port/`
 - `old-projects/vector-defence-silverlight-port/`
 
@@ -55,7 +55,6 @@ Run one port locally:
 
 ```bash
 npm run dev:swarm
-npm run dev:magic-trails
 npm run dev:fireworks
 npm run dev:vector-defence
 ```
