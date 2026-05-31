@@ -3,8 +3,9 @@
 // https://web.archive.org/web/20080923132130/http://www.shinedraw.com/animation-effect/flash-vs-silverlight-colorful-fireworks/
 
 const canvas = document.querySelector("#trails");
-const hint = document.querySelector("#hint");
 const context = canvas.getContext("2d");
+let hint = document.querySelector("#hint");
+let lastTime = performance.now();
 let dots = [];
 
 const randomBetween = (min, max) => min + (max - min) * Math.random();
@@ -20,8 +21,8 @@ resizeCanvas();
 addEventListener("resize", resizeCanvas);
 
 canvas.addEventListener("pointermove", (event) => {
-  const maxVelocity = 5;
-  hint.classList.add("is-fading");
+  hint?.classList.add("is-fading");
+  hint = null;
 
   for (let i = 0; i < 2; i++) {
     dots.push({
@@ -29,21 +30,24 @@ canvas.addEventListener("pointermove", (event) => {
       y: event.clientY,
       size: randomBetween(1, 3),
       color: `rgb(${randomBetween(128, 256)} ${randomBetween(128, 256)} ${randomBetween(128, 256)})`,
-      xVelocity: randomBetween(-maxVelocity, maxVelocity),
-      yVelocity: randomBetween(-maxVelocity, 0),
+      xVelocity: randomBetween(-5, 5),
+      yVelocity: randomBetween(-5, 0),
       opacity: 1,
     });
   }
 });
 
-setInterval(() => {
+function animate(time) {
+  const timeDelta = (time - lastTime) / 41.666666;  // normalized to 24 FPS
+  lastTime = time;
+
   context.clearRect(0, 0, innerWidth, innerHeight);
 
   for (const dot of dots) {
-    dot.opacity -= 0.015;
-    dot.yVelocity += 0.5;
-    dot.x += dot.xVelocity;
-    dot.y += dot.yVelocity;
+    dot.opacity -= 0.015 * timeDelta;
+    dot.yVelocity += 0.5 * timeDelta;
+    dot.x += dot.xVelocity * timeDelta;
+    dot.y += dot.yVelocity * timeDelta;
 
     for (let i = 0; i < 5; i++) {
       context.globalAlpha = i ? Math.max(0, dot.opacity * (0.75 - 0.15 * i)) : dot.opacity;
@@ -55,4 +59,7 @@ setInterval(() => {
   }
 
   dots = dots.filter(d => d.opacity > 0.1);
-}, 1000 / 24); // 24 fps
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
