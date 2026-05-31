@@ -30,24 +30,24 @@ canvas.addEventListener("pointermove", event => {
       y: event.clientY,
       size: randomBetween(1, 3),
       color: `rgb(${randomBetween(128, 256)} ${randomBetween(128, 256)} ${randomBetween(128, 256)})`,
-      xVelocity: randomBetween(-5, 5),
-      yVelocity: randomBetween(-5, 0),
+      xVelocity: randomBetween(-0.12, 0.12),
+      yVelocity: randomBetween(-0.12, 0),
       opacity: 1,
     });
   }
 });
 
 requestAnimationFrame(function animate(time) {
-  const timeDelta = (time - lastTime) / 41.666666;  // normalized to 24 FPS
+  const elapsed = time - lastTime;
   lastTime = time;
 
   context.clearRect(0, 0, innerWidth, innerHeight);
 
   for (const dot of dots) {
-    dot.opacity -= 0.015 * timeDelta;
-    dot.yVelocity += 0.5 * timeDelta;
-    dot.x += dot.xVelocity * timeDelta;
-    dot.y += dot.yVelocity * timeDelta;
+    dot.opacity -= 0.00036 * elapsed;
+    dot.yVelocity += 0.000288 * elapsed;
+    dot.x += dot.xVelocity * elapsed;
+    dot.y += dot.yVelocity * elapsed;
 
     for (let i = 0; i < 5; i++) {
       context.globalAlpha = i ? Math.max(0, dot.opacity * (0.75 - 0.15 * i)) : dot.opacity;
