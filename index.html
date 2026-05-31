@@ -65,14 +65,16 @@
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
-            gap: clamp(7px, 0.95vw, 12px);
+            column-gap: clamp(26px, 3.6vw, 44px);
+            row-gap: clamp(10px, 1.7vw, 18px);
             width: 100%;
             min-height: clamp(80px, 11vw, 140px);
         }
 
-        .word-space {
-            flex: 0 0 clamp(14px, 3vw, 36px);
-            height: 1px;
+        .word-group {
+            display: flex;
+            gap: clamp(7px, 0.95vw, 12px);
+            flex: 0 0 auto;
         }
 
         .letter-slot {
@@ -299,7 +301,6 @@
             }
 
             .kinetic-word {
-                justify-content: flex-start;
                 min-height: 172px;
             }
 
@@ -320,12 +321,12 @@
 
         @media (max-width: 520px) {
             .kinetic-word {
-                gap: 6px;
+                column-gap: 22px;
+                row-gap: 24px;
             }
 
-            .word-space {
-                flex-basis: 100%;
-                height: 0;
+            .word-group {
+                gap: 6px;
             }
 
             .letter-slot {
@@ -409,7 +410,7 @@
                 </article>
 
                 <article>
-                    <h2><span class="section-mark" aria-hidden="true">//</span> Notes <span class="section-mark" aria-hidden="true">//</span></h2>
+                    <h2><span class="section-mark" aria-hidden="true">//</span> Notes</h2>
                     <ul>
                         <li>Old code is intentionally allowed to look old.</li>
                         <li>Ports favor fidelity over a modern rewrite style.</li>
@@ -474,16 +475,16 @@
 
         function layoutPhrase() {
             let letterIndex = 0;
-            for (const char of phrase) {
-                if (char === " ") {
-                    const spacer = document.createElement("span");
-                    spacer.className = "word-space";
-                    word.appendChild(spacer);
-                    continue;
+            for (const phraseWord of phrase.split(" ")) {
+                const group = document.createElement("span");
+                group.className = "word-group";
+
+                for (const char of phraseWord) {
+                    group.appendChild(buildSlot(char, letterIndex));
+                    letterIndex++;
                 }
 
-                word.appendChild(buildSlot(char, letterIndex));
-                letterIndex++;
+                word.appendChild(group);
             }
         }
 
