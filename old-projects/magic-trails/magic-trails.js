@@ -20,7 +20,7 @@ function resizeCanvas() {
 resizeCanvas();
 addEventListener("resize", resizeCanvas);
 
-canvas.addEventListener("pointermove", (event) => {
+canvas.addEventListener("pointermove", event => {
   hint?.classList.add("is-fading");
   hint = null;
 
@@ -37,7 +37,7 @@ canvas.addEventListener("pointermove", (event) => {
   }
 });
 
-function animate(time) {
+requestAnimationFrame(function animate(time) {
   const timeDelta = (time - lastTime) / 41.666666;  // normalized to 24 FPS
   lastTime = time;
 
@@ -60,6 +60,4 @@ function animate(time) {
 
   dots = dots.filter(d => d.opacity > 0.1);
   requestAnimationFrame(animate);
-}
-
-requestAnimationFrame(animate);
+});
