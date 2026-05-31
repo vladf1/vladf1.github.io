@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magic Trails</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: black;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+
+      button {
+        position: fixed;
+        inset: 0;
+        border: 0;
+        background: transparent;
+        color: #7df9ff;
+        font: 700 48px "Avenir Next", "Segoe UI", Verdana, sans-serif;
+        cursor: pointer;
+        text-shadow:
+          0 0 10px rgb(125 249 255 / 65%),
+          0 0 28px rgb(255 79 216 / 35%);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="trails"></canvas>
+    <button id="cover">Click to Start</button>
+    <script src="./magic-trails.js"></script>
+  </body>
+</html>
