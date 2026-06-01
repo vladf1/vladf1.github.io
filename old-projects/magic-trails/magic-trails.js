@@ -20,14 +20,14 @@ function resizeCanvas() {
 resizeCanvas();
 addEventListener("resize", resizeCanvas);
 
-canvas.addEventListener("pointermove", event => {
+function addDots(x, y, dotCount) {
   hint?.classList.add("is-fading");
   hint = null;
 
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < dotCount; i++) {
     dots.push({
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       size: randomBetween(1, 3),
       color: `rgb(${randomBetween(128, 256)} ${randomBetween(128, 256)} ${randomBetween(128, 256)})`,
       xVelocity: randomBetween(-0.12, 0.12),
@@ -35,7 +35,10 @@ canvas.addEventListener("pointermove", event => {
       opacity: 1,
     });
   }
-});
+}
+
+canvas.addEventListener("pointerdown", event => addDots(event.clientX, event.clientY, 4));
+canvas.addEventListener("pointermove", event => addDots(event.clientX, event.clientY, 2));
 
 requestAnimationFrame(function animate(time) {
   const elapsed = time - lastTime;
