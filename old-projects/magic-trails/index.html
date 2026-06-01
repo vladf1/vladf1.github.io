@@ -14,11 +14,19 @@
         background: black;
       }
 
+      body,
+      canvas {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
       canvas {
         display: block;
         width: 100vw;
         height: 100vh;
         touch-action: none;
+        -webkit-tap-highlight-color: transparent;
       }
 
       #hint {
