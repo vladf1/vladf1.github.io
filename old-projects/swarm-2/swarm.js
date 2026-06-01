@@ -28,19 +28,20 @@ let lastTimed = performance.now();
 let framesRendered = 0;
 let fps = null;
 let paused = false;
-let animationFrame = 0;
+let pendingAnimationFrameId = 0;
 
 class Sprite {
   static minColor = 40;
   static maxVelocityPerMs = 0.36;
   static maxOffsetAmount = 10;
   static tooFar = 650;
+  static tooFarSquared = Sprite.tooFar * Sprite.tooFar;
   static minDistance = 200;
+  static minDistanceSquared = Sprite.minDistance * Sprite.minDistance;
   static pointerTurnMs = 83.33333333333333;
   static changeDirectionMs = 166.66666666666666;
   static maxRandomAngleChange = 1.5;
   static maxCrazinessPerMs = 0.006;
-  static white = colorToInt(255, 255, 255);
 
   constructor(startX, startY) {
     this.xPosition = startX;
@@ -52,6 +53,7 @@ class Sprite {
     this.offsetX = randomBetween(-Sprite.maxOffsetAmount, Sprite.maxOffsetAmount);
     this.offsetY = randomBetween(-Sprite.maxOffsetAmount, Sprite.maxOffsetAmount);
     this.gravityDistance = Sprite.minDistance * randomBetween(0.7, 1.4);
+    this.gravityDistanceSquared = this.gravityDistance * this.gravityDistance;
     this.angle = randomBetween(0, TWO_PI);
     this.xVelocity = 0;
     this.yVelocity = 0;
@@ -61,7 +63,9 @@ class Sprite {
     const red = Math.floor(randomBetween(Sprite.minColor, 255));
     const green = Math.floor(randomBetween(Sprite.minColor, 255));
     const blue = Math.floor(randomBetween(Sprite.minColor, 255));
-    this.intColor = colorToInt(red, green, blue);
+    this.red = red;
+    this.green = green;
+    this.blue = blue;
     this.updateVector();
   }
 
@@ -70,15 +74,17 @@ class Sprite {
     this.yVelocity = this.speed * Math.sin(this.angle);
   }
 
-  animate(elapsedMs) {
+  updateMotion(elapsedMs) {
     if (pointerX > 0 && pointerY > 0) {
-      const distance = Math.hypot(this.xPosition - pointerX, this.yPosition - pointerY);
+      const pointerDeltaX = this.xPosition - pointerX;
+      const pointerDeltaY = this.yPosition - pointerY;
+      const distanceSquared = pointerDeltaX * pointerDeltaX + pointerDeltaY * pointerDeltaY;
 
-      if (repelMode && distance < Sprite.minDistance) {
+      if (repelMode && distanceSquared < Sprite.minDistanceSquared) {
         this.angleChangeMsLeft = 0;
-        this.angle = normalizeAngle(Math.atan2(this.yPosition - pointerY, this.xPosition - pointerX));
+        this.angle = normalizeAngle(Math.atan2(pointerDeltaY, pointerDeltaX));
         this.updateVector();
-      } else if (distance > this.gravityDistance && distance < Sprite.tooFar) {
+      } else if (distanceSquared > this.gravityDistanceSquared && distanceSquared < Sprite.tooFarSquared) {
         this.angleChangeMsLeft = Sprite.pointerTurnMs;
         const newAngle = normalizeAngle(
           Math.atan2(pointerY - this.yPosition + this.offsetY, pointerX - this.xPosition + this.offsetX),
@@ -135,16 +141,20 @@ class Sprite {
   }
 
   drawPixels(pixels) {
-    const color = repelMode ? Sprite.white : this.intColor;
+    const red = repelMode ? 255 : this.red;
+    const green = repelMode ? 255 : this.green;
+    const blue = repelMode ? 255 : this.blue;
     drawLine(
       pixels,
       canvasWidth,
       canvasHeight,
-      Math.trunc(this.xPosition),
-      Math.trunc(this.yPosition),
-      Math.trunc(this.previousX),
-      Math.trunc(this.previousY),
-      color,
+      this.xPosition | 0,
+      this.yPosition | 0,
+      this.previousX | 0,
+      this.previousY | 0,
+      red,
+      green,
+      blue,
     );
     this.previousX = this.xPosition;
     this.previousY = this.yPosition;
@@ -161,8 +171,8 @@ function resize() {
   }
 }
 
-function animate(now) {
-  animationFrame = 0;
+function renderFrame(now) {
+  pendingAnimationFrameId = 0;
   if (paused) {
     return;
   }
@@ -176,19 +186,16 @@ function animate(now) {
     lastTimed = now;
   }
 
-  for (const sprite of sprites) {
-    sprite.animate(elapsedMs);
-  }
-
   fadePixels(bitmap.data, 1 - fadeAmountPerMs * elapsedMs);
   for (const sprite of sprites) {
+    sprite.updateMotion(elapsedMs);
     sprite.drawPixels(bitmap.data);
   }
   context.putImageData(bitmap, 0, 0);
 
   stats.textContent = `FPS: ${fps ?? "--"}`;
   framesRendered++;
-  animationFrame = requestAnimationFrame(animate);
+  pendingAnimationFrameId = requestAnimationFrame(renderFrame);
 }
 
 function syncControls() {
@@ -207,11 +214,11 @@ function setPaused(value) {
 }
 
 function startAnimation() {
-  if (animationFrame !== 0) {
+  if (pendingAnimationFrameId !== 0) {
     return;
   }
   lastAnimated = 0;
-  animationFrame = requestAnimationFrame(animate);
+  pendingAnimationFrameId = requestAnimationFrame(renderFrame);
 }
 
 function setSpriteCount(value) {
@@ -308,16 +315,13 @@ function isControlElement(target) {
 function fadePixels(pixels, amount) {
   const clampedAmount = Math.max(0, Math.min(1, amount));
   for (let index = 0; index < pixels.length; index += 4) {
-    if (pixels[index] !== 0 || pixels[index + 1] !== 0 || pixels[index + 2] !== 0) {
-      pixels[index] = clampedAmount * pixels[index];
-      pixels[index + 1] = clampedAmount * pixels[index + 1];
-      pixels[index + 2] = clampedAmount * pixels[index + 2];
-    }
-    pixels[index + 3] = 255;
+    pixels[index] = clampedAmount * pixels[index];
+    pixels[index + 1] = clampedAmount * pixels[index + 1];
+    pixels[index + 2] = clampedAmount * pixels[index + 2];
   }
 }
 
-function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, endY, color) {
+function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, endY, red, green, blue) {
   let deltaX = endX - startX;
   let deltaY = endY - startY;
   let stepX = 0;
@@ -348,7 +352,14 @@ function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, end
   let currentY = startY;
   let error = longAxisDistance >> 1;
 
-  setPixel(pixels, surfaceWidth, surfaceHeight, currentX, currentY, color);
+  if (currentY < surfaceHeight && currentY >= 0 && currentX < surfaceWidth && currentX >= 0) {
+    const pixelIndex = (currentY * surfaceWidth + currentX) * 4;
+    pixels[pixelIndex] = red;
+    pixels[pixelIndex + 1] = green;
+    pixels[pixelIndex + 2] = blue;
+    pixels[pixelIndex + 3] = 255;
+  }
+
   for (let lineStep = 0; lineStep < longAxisDistance; lineStep++) {
     error -= shortAxisDistance;
     if (error < 0) {
@@ -359,17 +370,13 @@ function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, end
       currentX += primaryStepX;
       currentY += primaryStepY;
     }
-    setPixel(pixels, surfaceWidth, surfaceHeight, currentX, currentY, color);
-  }
-}
-
-function setPixel(pixels, surfaceWidth, surfaceHeight, pixelX, pixelY, color) {
-  if (pixelY < surfaceHeight && pixelY >= 0 && pixelX < surfaceWidth && pixelX >= 0) {
-    const pixelIndex = (pixelY * surfaceWidth + pixelX) * 4;
-    pixels[pixelIndex] = (color >> 16) & 255;
-    pixels[pixelIndex + 1] = (color >> 8) & 255;
-    pixels[pixelIndex + 2] = color & 255;
-    pixels[pixelIndex + 3] = 255;
+    if (currentY < surfaceHeight && currentY >= 0 && currentX < surfaceWidth && currentX >= 0) {
+      const pixelIndex = (currentY * surfaceWidth + currentX) * 4;
+      pixels[pixelIndex] = red;
+      pixels[pixelIndex + 1] = green;
+      pixels[pixelIndex + 2] = blue;
+      pixels[pixelIndex + 3] = 255;
+    }
   }
 }
 
@@ -388,15 +395,24 @@ function randomBetween(min, max) {
 }
 
 function normalizeAngle(angle) {
-  return ((angle % TWO_PI) + TWO_PI) % TWO_PI;
+  if (angle < 0) {
+    return angle + TWO_PI;
+  }
+  if (angle >= TWO_PI) {
+    return angle - TWO_PI;
+  }
+  return angle;
 }
 
 function angleDifference(targetAngle, currentAngle) {
-  return Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
-}
-
-function colorToInt(red, green, blue) {
-  return (red << 16) | (green << 8) | blue;
+  const difference = targetAngle - currentAngle;
+  if (difference > Math.PI) {
+    return difference - TWO_PI;
+  }
+  if (difference < -Math.PI) {
+    return difference + TWO_PI;
+  }
+  return difference;
 }
 
 addEventListener("resize", resize);
