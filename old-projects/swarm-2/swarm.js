@@ -82,13 +82,13 @@ class Sprite {
 
       if (repelMode && distanceSquared < Sprite.minDistanceSquared) {
         this.angleChangeMsLeft = 0;
-        this.angle = normalizeAngle(Math.atan2(pointerDeltaY, pointerDeltaX));
+        this.angle = Math.atan2(pointerDeltaY, pointerDeltaX);
         this.updateVector();
       } else if (distanceSquared > this.gravityDistanceSquared && distanceSquared < Sprite.tooFarSquared) {
         this.angleChangeMsLeft = Sprite.pointerTurnMs;
-        const newAngle = normalizeAngle(
-          Math.atan2(pointerY - this.yPosition + this.offsetY, pointerX - this.xPosition + this.offsetX),
-        );
+        const targetX = pointerX - this.xPosition + this.offsetX;
+        const targetY = pointerY - this.yPosition + this.offsetY;
+        const newAngle = Math.atan2(targetY, targetX);
         this.angleStepPerMs = angleDifference(newAngle, this.angle) / this.angleChangeMsLeft;
       }
     }
@@ -100,7 +100,13 @@ class Sprite {
     }
 
     if (this.angleChangeMsLeft > 0) {
-      this.angle = normalizeAngle(this.angle + this.angleStepPerMs * elapsedMs);
+      this.angle += this.angleStepPerMs * elapsedMs;
+      // Keep the angle bounded because this incremental path can drift outside one turn.
+      if (this.angle < 0) {
+        this.angle += TWO_PI;
+      } else if (this.angle >= TWO_PI) {
+        this.angle -= TWO_PI;
+      }
       this.updateVector();
       this.angleChangeMsLeft -= elapsedMs;
     }
@@ -132,7 +138,7 @@ class Sprite {
     if (bounced) {
       nextX = this.xPosition + this.xVelocity * elapsedMs;
       nextY = this.yPosition + this.yVelocity * elapsedMs;
-      this.angle = normalizeAngle(Math.atan2(this.yVelocity, this.xVelocity));
+      this.angle = Math.atan2(this.yVelocity, this.xVelocity);
       this.angleChangeMsLeft = 0;
     }
 
@@ -403,16 +409,6 @@ function randomBetween(min, max) {
 
 function packColor(red, green, blue) {
   return 0xff000000 | (blue << 16) | (green << 8) | red;
-}
-
-function normalizeAngle(angle) {
-  if (angle < 0) {
-    return angle + TWO_PI;
-  }
-  if (angle >= TWO_PI) {
-    return angle - TWO_PI;
-  }
-  return angle;
 }
 
 function angleDifference(targetAngle, currentAngle) {
