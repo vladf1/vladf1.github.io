@@ -18,7 +18,9 @@ let fadeAmountPerMs = fadeAmount * FADE_AMOUNT_PER_MS_SCALE;
 
 let canvasWidth = 0;
 let canvasHeight = 0;
+let canvasWordRowStride = 0;
 let bitmap = null;
+let bitmapWords = null;
 let sprites = [];
 let pointerX = -1;
 let pointerY = -1;
@@ -63,9 +65,7 @@ class Sprite {
     const red = Math.floor(randomBetween(Sprite.minColor, 255));
     const green = Math.floor(randomBetween(Sprite.minColor, 255));
     const blue = Math.floor(randomBetween(Sprite.minColor, 255));
-    this.red = red;
-    this.green = green;
-    this.blue = blue;
+    this.colorWord = packColor(red, green, blue);
     this.updateVector();
   }
 
@@ -140,22 +140,35 @@ class Sprite {
     this.yPosition = nextY;
   }
 
-  drawPixels(pixels) {
-    const red = repelMode ? 255 : this.red;
-    const green = repelMode ? 255 : this.green;
-    const blue = repelMode ? 255 : this.blue;
-    drawLine(
-      pixels,
-      canvasWidth,
-      canvasHeight,
-      this.xPosition | 0,
-      this.yPosition | 0,
-      this.previousX | 0,
-      this.previousY | 0,
-      red,
-      green,
-      blue,
-    );
+  drawPixels(pixelWords) {
+    const colorWord = repelMode ? 0xffffffff : this.colorWord;
+    let endX = this.xPosition | 0;
+    let endY = this.yPosition | 0;
+    let startX = this.previousX | 0;
+    let startY = this.previousY | 0;
+
+    if (endX < 0) {
+      endX = 0;
+    } else if (endX >= canvasWidth) {
+      endX = canvasWidth - 1;
+    }
+    if (endY < 0) {
+      endY = 0;
+    } else if (endY >= canvasHeight) {
+      endY = canvasHeight - 1;
+    }
+    if (startX < 0) {
+      startX = 0;
+    } else if (startX >= canvasWidth) {
+      startX = canvasWidth - 1;
+    }
+    if (startY < 0) {
+      startY = 0;
+    } else if (startY >= canvasHeight) {
+      startY = canvasHeight - 1;
+    }
+
+    drawLine(pixelWords, startX, startY, endX, endY, colorWord);
     this.previousX = this.xPosition;
     this.previousY = this.yPosition;
   }
@@ -164,6 +177,7 @@ class Sprite {
 function resize() {
   canvasWidth = Math.max(1, Math.floor(innerWidth));
   canvasHeight = Math.max(1, Math.floor(innerHeight));
+  canvasWordRowStride = canvasWidth;
   resetDrawingSurface();
 
   if (sprites.length === 0) {
@@ -186,10 +200,10 @@ function renderFrame(now) {
     lastTimed = now;
   }
 
-  fadePixels(bitmap.data, 1 - fadeAmountPerMs * elapsedMs);
+  fadePixels(bitmapWords, 1 - fadeAmountPerMs * elapsedMs);
   for (const sprite of sprites) {
     sprite.updateMotion(elapsedMs);
-    sprite.drawPixels(bitmap.data);
+    sprite.drawPixels(bitmapWords);
   }
   context.putImageData(bitmap, 0, 0);
 
@@ -268,6 +282,7 @@ function resetDrawingSurface() {
   context.fillStyle = "black";
   context.fillRect(0, 0, canvasWidth, canvasHeight);
   bitmap = context.createImageData(canvasWidth, canvasHeight);
+  bitmapWords = new Uint32Array(bitmap.data.buffer);
   lastAnimated = 0;
   lastTimed = performance.now();
   framesRendered = 0;
@@ -312,16 +327,24 @@ function isControlElement(target) {
   return target instanceof HTMLButtonElement || target instanceof HTMLInputElement;
 }
 
-function fadePixels(pixels, amount) {
+function fadePixels(pixelWords, amount) {
   const clampedAmount = Math.max(0, Math.min(1, amount));
-  for (let index = 0; index < pixels.length; index += 4) {
-    pixels[index] = clampedAmount * pixels[index];
-    pixels[index + 1] = clampedAmount * pixels[index + 1];
-    pixels[index + 2] = clampedAmount * pixels[index + 2];
+  if (clampedAmount >= 1) {
+    return;
+  }
+
+  const fadeScale = (clampedAmount * 256) | 0;
+
+  for (let index = 0; index < pixelWords.length; index++) {
+    const pixel = pixelWords[index];
+    pixelWords[index] =
+      (pixel & 0xff000000) |
+      ((((pixel & 0x00ff00ff) * fadeScale) >>> 8) & 0x00ff00ff) |
+      ((((pixel & 0x0000ff00) * fadeScale) >>> 8) & 0x0000ff00);
   }
 }
 
-function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, endY, red, green, blue) {
+function drawLine(pixelWords, startX, startY, endX, endY, colorWord) {
   let deltaX = endX - startX;
   let deltaY = endY - startY;
   let stepX = 0;
@@ -342,41 +365,25 @@ function drawLine(pixels, surfaceWidth, surfaceHeight, startX, startY, endX, end
   }
 
   const xIsLongAxis = deltaX > deltaY;
-  const primaryStepX = xIsLongAxis ? stepX : 0;
-  const primaryStepY = xIsLongAxis ? 0 : stepY;
-  const diagonalStepX = stepX;
-  const diagonalStepY = stepY;
+  const yPixelStep = stepY * canvasWordRowStride;
+  const primaryPixelStep = xIsLongAxis ? stepX : yPixelStep;
+  const diagonalPixelStep = stepX + yPixelStep;
   const shortAxisDistance = xIsLongAxis ? deltaY : deltaX;
   const longAxisDistance = xIsLongAxis ? deltaX : deltaY;
-  let currentX = startX;
-  let currentY = startY;
   let error = longAxisDistance >> 1;
 
-  if (currentY < surfaceHeight && currentY >= 0 && currentX < surfaceWidth && currentX >= 0) {
-    const pixelIndex = (currentY * surfaceWidth + currentX) * 4;
-    pixels[pixelIndex] = red;
-    pixels[pixelIndex + 1] = green;
-    pixels[pixelIndex + 2] = blue;
-    pixels[pixelIndex + 3] = 255;
-  }
+  let pixelIndex = startY * canvasWordRowStride + startX;
+  pixelWords[pixelIndex] = colorWord;
 
   for (let lineStep = 0; lineStep < longAxisDistance; lineStep++) {
     error -= shortAxisDistance;
     if (error < 0) {
       error += longAxisDistance;
-      currentX += diagonalStepX;
-      currentY += diagonalStepY;
+      pixelIndex += diagonalPixelStep;
     } else {
-      currentX += primaryStepX;
-      currentY += primaryStepY;
+      pixelIndex += primaryPixelStep;
     }
-    if (currentY < surfaceHeight && currentY >= 0 && currentX < surfaceWidth && currentX >= 0) {
-      const pixelIndex = (currentY * surfaceWidth + currentX) * 4;
-      pixels[pixelIndex] = red;
-      pixels[pixelIndex + 1] = green;
-      pixels[pixelIndex + 2] = blue;
-      pixels[pixelIndex + 3] = 255;
-    }
+    pixelWords[pixelIndex] = colorWord;
   }
 }
 
@@ -392,6 +399,10 @@ function readFadeAmount(value) {
 
 function randomBetween(min, max) {
   return min + (max - min) * Math.random();
+}
+
+function packColor(red, green, blue) {
+  return 0xff000000 | (blue << 16) | (green << 8) | red;
 }
 
 function normalizeAngle(angle) {
