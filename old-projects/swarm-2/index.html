@@ -155,51 +155,6 @@
         outline-offset: 2px;
       }
 
-      .toggle-field input {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .toggle-mark {
-        position: relative;
-        width: 34px;
-        height: 18px;
-        flex: 0 0 auto;
-        border-radius: 999px;
-        background: rgb(0 0 0 / 38%);
-        border: 1px solid rgb(255 255 255 / 28%);
-      }
-
-      .toggle-mark::after {
-        content: "";
-        position: absolute;
-        left: 2px;
-        top: 2px;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #d2d2d2;
-        transition:
-          background 120ms ease,
-          transform 120ms ease;
-      }
-
-      .toggle-field input:checked + .toggle-mark {
-        border-color: #f4ff28;
-        background: rgb(244 255 40 / 22%);
-      }
-
-      .toggle-field input:checked + .toggle-mark::after {
-        background: #f4ff28;
-        transform: translateX(16px);
-      }
-
-      .toggle-field input:focus-visible + .toggle-mark {
-        outline: 2px solid #f4ff28;
-        outline-offset: 2px;
-      }
-
       @media (max-width: 640px) {
         #hint {
           font-size: 32px;
@@ -231,12 +186,7 @@
         <span>Trail fade</span>
         <input id="fadeAmount" type="range" min="0.02" max="0.25" step="0.01" />
       </label>
-      <label class="control-field toggle-field">
-        <span>Round pixels</span>
-        <input id="roundPixels" type="checkbox" />
-        <span class="toggle-mark" aria-hidden="true"></span>
-      </label>
     </div>
-    <script src="./swarm.js?v=19"></script>
+    <script src="./swarm.js?v=21"></script>
   </body>
 </html>

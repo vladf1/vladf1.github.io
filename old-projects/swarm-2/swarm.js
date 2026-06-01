@@ -9,15 +9,12 @@ const stats = document.querySelector("#stats");
 const pauseButton = document.querySelector("#pauseButton");
 const spriteCountInput = document.querySelector("#spriteCount");
 const fadeAmountInput = document.querySelector("#fadeAmount");
-const roundPixelsInput = document.querySelector("#roundPixels");
 let hint = document.querySelector("#hint");
 
 const params = new URLSearchParams(location.search);
 let spriteCount = readSpriteCount(params.get("NumberOfSprites"));
 let fadeAmount = readFadeAmount(params.get("FadeAmount"));
 let fadeAmountPerMs = fadeAmount * FADE_AMOUNT_PER_MS_SCALE;
-let roundPixels = readBoolean(params.get("RoundPixels"), false);
-let snapPixel = roundPixels ? Math.round : Math.trunc;
 
 let canvasWidth = 0;
 let canvasHeight = 0;
@@ -137,24 +134,20 @@ class Sprite {
     this.yPosition = nextY;
   }
 
-  savePosition() {
-    this.previousX = this.xPosition;
-    this.previousY = this.yPosition;
-  }
-
   drawPixels(pixels) {
     const color = repelMode ? Sprite.white : this.intColor;
     drawLine(
       pixels,
       canvasWidth,
       canvasHeight,
-      snapPixel(this.xPosition),
-      snapPixel(this.yPosition),
-      snapPixel(this.previousX),
-      snapPixel(this.previousY),
+      Math.trunc(this.xPosition),
+      Math.trunc(this.yPosition),
+      Math.trunc(this.previousX),
+      Math.trunc(this.previousY),
       color,
     );
-    this.savePosition();
+    this.previousX = this.xPosition;
+    this.previousY = this.yPosition;
   }
 }
 
@@ -203,7 +196,6 @@ function syncControls() {
   pauseButton.setAttribute("aria-pressed", String(paused));
   spriteCountInput.value = String(spriteCount);
   fadeAmountInput.value = String(fadeAmount);
-  roundPixelsInput.checked = roundPixels;
 }
 
 function setPaused(value) {
@@ -238,13 +230,6 @@ function setFadeAmount(value) {
   fadeAmount = readFadeAmount(value);
   fadeAmountPerMs = fadeAmount * FADE_AMOUNT_PER_MS_SCALE;
   fadeAmountInput.value = String(fadeAmount);
-  writeConfigToUrl();
-}
-
-function setRoundPixels(value) {
-  roundPixels = value;
-  snapPixel = roundPixels ? Math.round : Math.trunc;
-  roundPixelsInput.checked = roundPixels;
   writeConfigToUrl();
 }
 
@@ -286,7 +271,6 @@ function writeConfigToUrl() {
   const query = new URLSearchParams();
   query.set("NumberOfSprites", String(spriteCount));
   query.set("FadeAmount", String(fadeAmount));
-  query.set("RoundPixels", String(roundPixels));
   history.replaceState(null, "", `${location.pathname}?${query}`);
 }
 
@@ -399,10 +383,6 @@ function readFadeAmount(value) {
   return Number.isFinite(parsed) ? Math.max(0.02, Math.min(0.25, parsed)) : DEFAULT_FADE_AMOUNT;
 }
 
-function readBoolean(value, fallback) {
-  return value === null ? fallback : value.toLowerCase() === "true";
-}
-
 function randomBetween(min, max) {
   return min + (max - min) * Math.random();
 }
@@ -439,7 +419,6 @@ pauseButton.addEventListener("click", () => setPaused(!paused));
 spriteCountInput.addEventListener("input", () => setSpriteCount(spriteCountInput.value));
 spriteCountInput.addEventListener("change", () => setSpriteCount(spriteCountInput.value));
 fadeAmountInput.addEventListener("input", () => setFadeAmount(fadeAmountInput.value));
-roundPixelsInput.addEventListener("change", () => setRoundPixels(roundPixelsInput.checked));
 
 syncControls();
 writeConfigToUrl();
