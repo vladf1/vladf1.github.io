@@ -1,6 +1,7 @@
 const DEFAULT_SPRITE_COUNT = 2500;
 const DEFAULT_FADE_AMOUNT = 0.1;
 const FADE_AMOUNT_PER_MS_SCALE = 0.06;
+const FADE_FRAME_INTERVAL = 3;
 const TWO_PI = Math.PI * 2;
 
 const canvas = document.querySelector("#swarm");
@@ -28,6 +29,8 @@ let repelMode = false;
 let lastAnimated = 0;
 let lastTimed = performance.now();
 let framesRendered = 0;
+let fadeFramesElapsed = 0;
+let fadeElapsedMs = 0;
 let fps = null;
 let paused = false;
 let pendingAnimationFrameId = 0;
@@ -206,7 +209,14 @@ function renderFrame(now) {
     lastTimed = now;
   }
 
-  fadePixels(bitmapWords, 1 - fadeAmountPerMs * elapsedMs);
+  fadeFramesElapsed++;
+  fadeElapsedMs += elapsedMs;
+  if (fadeFramesElapsed === FADE_FRAME_INTERVAL) {
+    fadePixels(bitmapWords, 1 - fadeAmountPerMs * fadeElapsedMs);
+    fadeFramesElapsed = 0;
+    fadeElapsedMs = 0;
+  }
+
   for (const sprite of sprites) {
     sprite.updateMotion(elapsedMs);
     sprite.drawPixels(bitmapWords);
@@ -289,9 +299,12 @@ function resetDrawingSurface() {
   context.fillRect(0, 0, canvasWidth, canvasHeight);
   bitmap = context.createImageData(canvasWidth, canvasHeight);
   bitmapWords = new Uint32Array(bitmap.data.buffer);
+  bitmapWords.fill(0xff000000);
   lastAnimated = 0;
   lastTimed = performance.now();
   framesRendered = 0;
+  fadeFramesElapsed = 0;
+  fadeElapsedMs = 0;
   fps = null;
 }
 
