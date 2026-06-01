@@ -2,6 +2,9 @@ const DEFAULT_SPRITE_COUNT = 2500;
 const DEFAULT_FADE_AMOUNT = 0.1;
 const FADE_AMOUNT_PER_MS_SCALE = 0.06;
 const FADE_FRAME_INTERVAL = 3;
+const DEFAULT_REPEL_DISTANCE = 200;
+const MIN_REPEL_DISTANCE = 90;
+const REPEL_DISTANCE_VIEWPORT_SCALE = 0.28;
 const TWO_PI = Math.PI * 2;
 
 const canvas = document.querySelector("#swarm");
@@ -41,7 +44,7 @@ class Sprite {
   static maxOffsetAmount = 10;
   static tooFar = 650;
   static tooFarSquared = Sprite.tooFar * Sprite.tooFar;
-  static minDistance = 200;
+  static minDistance = DEFAULT_REPEL_DISTANCE;
   static minDistanceSquared = Sprite.minDistance * Sprite.minDistance;
   static pointerTurnMs = 83.33333333333333;
   static changeDirectionMs = 166.66666666666666;
@@ -184,9 +187,11 @@ class Sprite {
 }
 
 function resize() {
-  canvasWidth = Math.max(1, Math.floor(innerWidth));
-  canvasHeight = Math.max(1, Math.floor(innerHeight));
+  const rect = canvas.getBoundingClientRect();
+  canvasWidth = Math.max(1, Math.floor(rect.width));
+  canvasHeight = Math.max(1, Math.floor(rect.height));
   canvasWordRowStride = canvasWidth;
+  updateSpriteInteractionDistances();
   resetDrawingSurface();
 
   if (sprites.length === 0) {
@@ -292,6 +297,12 @@ function createSprite() {
   return new Sprite(Math.floor(randomBetween(0, canvasWidth)), Math.floor(randomBetween(0, canvasHeight)));
 }
 
+function updateSpriteInteractionDistances() {
+  const viewportDistance = Math.min(canvasWidth, canvasHeight) * REPEL_DISTANCE_VIEWPORT_SCALE;
+  Sprite.minDistance = Math.min(DEFAULT_REPEL_DISTANCE, Math.max(MIN_REPEL_DISTANCE, viewportDistance));
+  Sprite.minDistanceSquared = Sprite.minDistance * Sprite.minDistance;
+}
+
 function resetDrawingSurface() {
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
@@ -317,8 +328,8 @@ function writeConfigToUrl() {
 
 function updatePointer(event) {
   const rect = canvas.getBoundingClientRect();
-  pointerX = event.clientX - rect.left;
-  pointerY = event.clientY - rect.top;
+  pointerX = (event.clientX - rect.left) * canvasWidth / rect.width;
+  pointerY = (event.clientY - rect.top) * canvasHeight / rect.height;
   fadeHint();
 }
 
@@ -436,6 +447,9 @@ function angleDifference(targetAngle, currentAngle) {
 }
 
 addEventListener("resize", resize);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", resize);
+}
 addEventListener("keydown", handleKeyDown);
 canvas.addEventListener("pointermove", updatePointer);
 canvas.addEventListener("pointerleave", clearPointer);
