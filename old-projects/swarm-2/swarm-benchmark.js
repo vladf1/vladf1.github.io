@@ -10,7 +10,7 @@ import {
   createWebgpuComputeRenderer,
   createWebglRenderer,
   updateSprites
-} from "./swarm.js?v=50";
+} from "./swarm.js";
 
 const DEFAULT_FRAME_COUNT = 180;
 const DEFAULT_WIDTH = 800;
