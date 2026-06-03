@@ -3,7 +3,6 @@ import {
   DEFAULT_SPRITE_COUNT,
   FADE_AMOUNT_PER_MS_SCALE,
   createCpuRenderer,
-  createLineVertexBuffer,
   createRandom,
   createSprites,
   createWebgpuComputeRenderer,
@@ -87,14 +86,12 @@ async function runRendererBenchmark(name, createRenderer, canvas, config) {
   }
 
   const sprites = createBenchmarkSprites(config);
-  const vertices = createLineVertexBuffer(config.spriteCount);
   const motionState = createMotionState(config);
   const started = performance.now();
 
   for (let frame = 0; frame < config.frameCount; frame++) {
-    renderer.fade(1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS);
-    updateSprites(sprites, FIXED_ELAPSED_MS, motionState);
-    renderer.drawSprites(sprites, vertices, motionState.repelMode);
+    const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
+    renderer.drawFrame(sprites, motionState, motionState.repelMode, FIXED_ELAPSED_MS, fadeAmount);
   }
 
   if ("finish" in renderer) {
@@ -115,7 +112,7 @@ async function runWebgpuComputeBenchmark(config) {
 
   for (let frame = 0; frame < config.frameCount; frame++) {
     const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
-    renderer.drawFrame(FIXED_ELAPSED_MS, fadeAmount);
+    renderer.drawFrame(sprites, motionState, motionState.repelMode, FIXED_ELAPSED_MS, fadeAmount);
   }
 
   await renderer.finish();

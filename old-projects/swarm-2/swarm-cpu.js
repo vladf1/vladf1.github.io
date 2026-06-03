@@ -1,3 +1,5 @@
+import { updateSprites as updateSpriteMotion } from "./swarm-common.js";
+
 export function createCpuRenderer(canvas, width, height) {
   const renderer = {
     canvas,
@@ -22,11 +24,19 @@ export function createCpuRenderer(canvas, width, height) {
     fade(amount) {
       fadePixels(this.bitmapWords, amount);
     },
-    drawSprites(sprites, vertices, repelMode) {
+    updateSprites(sprites, elapsedMs, motionState) {
+      updateSpriteMotion(sprites, elapsedMs, motionState);
+    },
+    drawSprites(sprites, repelMode) {
       for (const sprite of sprites) {
         drawCpuSprite(sprite, this.bitmapWords, this.width, this.height, repelMode);
       }
       this.context.putImageData(this.bitmap, 0, 0);
+    },
+    drawFrame(sprites, motionState, repelMode, elapsedMs, fadeAmount) {
+      this.fade(fadeAmount);
+      this.updateSprites(sprites, elapsedMs, motionState);
+      this.drawSprites(sprites, repelMode);
     }
   };
   renderer.resize(width, height);

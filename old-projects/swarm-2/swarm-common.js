@@ -14,6 +14,15 @@ export const RendererMode = {
   webgpuCompute: "webgpu-compute"
 };
 
+/**
+ * @typedef {Object} SwarmRenderer
+ * @property {(width: number, height: number) => void} resize
+ * @property {() => void} clear
+ * @property {(sprites: Sprite[], elapsedMs: number, motionState: Object) => void} updateSprites
+ * @property {(sprites: Sprite[], repelMode: boolean) => void} drawSprites
+ * @property {(sprites: Sprite[], motionState: Object, repelMode: boolean, elapsedMs: number, fadeAmount: number) => void} drawFrame
+ */
+
 export class Sprite {
   static minColor = 40;
   static maxVelocityPerMs = 0.36;
@@ -154,10 +163,6 @@ export function updateSprites(sprites, elapsedMs, motionState) {
   for (const sprite of sprites) {
     sprite.updateMotion(elapsedMs, motionState);
   }
-}
-
-export function createLineVertexBuffer(spriteCount) {
-  return new Float32Array(spriteCount * LINE_FLOATS_PER_SPRITE);
 }
 
 export function randomBetween(random, min, max) {
