@@ -1,4 +1,12 @@
-import { Sprite, VERTICES_PER_LINE, loadShaders, setSpriteInteractionDistances } from "./swarm-common.js";
+import { Sprite, VERTICES_PER_LINE, loadShaders } from "./swarm-common.js";
+
+export const MAX_ATTRACTORS = 128;
+const FLOATS_PER_ATTRACTOR = 4;
+const FLOATS_PER_MARKER_VERTEX = 8;
+const VERTICES_PER_ATTRACTOR_MARKER = 4;
+const ATTRACTOR_STRENGTH = 1;
+const ATTRACTOR_RADIUS = 960;
+const ATTRACTOR_MARKER_SIZE = 10;
 
 function createWebgpuPresenter(device, format, shaderSource) {
   const shader = device.createShaderModule({
@@ -63,6 +71,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
   const motionCData = new Float32Array(spriteCount * 4);
   const colorData = new Float32Array(spriteCount * 4);
   const randomData = new Uint32Array(spriteCount);
+  const attractorData = new Float32Array(MAX_ATTRACTORS * FLOATS_PER_ATTRACTOR);
+  const attractorMarkerData = new Float32Array(MAX_ATTRACTORS * VERTICES_PER_ATTRACTOR_MARKER * FLOATS_PER_MARKER_VERTEX);
 
   for (let index = 0; index < spriteCount; index++) {
     const sprite = sprites[index];
@@ -81,8 +91,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     motionBData.set([
       sprite.offsetX,
       sprite.offsetY,
-      sprite.gravityDistanceSquared,
-      sprite.angle
+        0,
+        sprite.angle
     ], index * 4);
     motionCData.set([
       sprite.angleStepPerMs,
@@ -179,8 +189,16 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     size: lineVertexCount * computeVertexStride,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
   });
+  const attractorBuffer = device.createBuffer({
+    size: attractorData.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  });
+  const attractorVertexBuffer = device.createBuffer({
+    size: attractorMarkerData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  });
   const paramsBuffer = device.createBuffer({
-    size: 48,
+    size: 64,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
   const resolutionBuffer = device.createBuffer({
@@ -202,7 +220,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       { binding: 4, resource: { buffer: colorBuffer } },
       { binding: 5, resource: { buffer: randomBuffer } },
       { binding: 6, resource: { buffer: vertexBuffer } },
-      { binding: 7, resource: { buffer: paramsBuffer } }
+      { binding: 7, resource: { buffer: paramsBuffer } },
+      { binding: 8, resource: { buffer: attractorBuffer } }
     ]
   });
   const lineBindGroup = device.createBindGroup({
@@ -235,6 +254,12 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     lineBindGroup,
     fadeBindGroup,
     vertexBuffer,
+    attractorBuffer,
+    attractorVertexBuffer,
+    attractorData,
+    attractorMarkerData,
+    attractorCount: 0,
+    attractorVertexCount: 0,
     paramsBuffer,
     resolutionBuffer,
     fadeBuffer,
@@ -271,25 +296,24 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
     },
-    updateSprites() {
-    },
-    drawSprites() {
-    },
-    drawFrame(sprites, motionState, repelMode, elapsedMs, fadeAmount) {
-      this.updateSprites(sprites, elapsedMs, motionState);
+    drawFrame(sprites, motionState, elapsedMs, fadeAmount) {
       this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
         this.width,
         this.height,
-        this.motionState.pointerX,
-        this.motionState.pointerY,
+        this.spriteCount,
+        this.attractorCount,
         elapsedMs,
-        Sprite.minDistanceSquared,
-        Sprite.tooFarSquared,
-        this.motionState.repelMode ? 1 : 0,
-        Sprite.pointerTurnMs,
+        0,
+        0,
+        0,
+        Sprite.attractorTurnMs,
         Sprite.changeDirectionMs,
         Sprite.maxRandomAngleChange,
-        this.spriteCount
+        0,
+        0,
+        0,
+        0,
+        0
       ]));
 
       if (fadeAmount !== null) {
@@ -329,9 +353,35 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       linePass.setBindGroup(0, this.lineBindGroup);
       linePass.setVertexBuffer(0, this.vertexBuffer);
       linePass.draw(lineVertexCount);
+      if (this.attractorVertexCount > 0) {
+        linePass.setVertexBuffer(0, this.attractorVertexBuffer);
+        linePass.draw(this.attractorVertexCount);
+      }
       linePass.end();
       this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
+    },
+    setAttractors(attractors) {
+      this.attractorCount = Math.min(attractors.length, MAX_ATTRACTORS);
+      this.attractorData.fill(0);
+      this.attractorMarkerData.fill(0);
+      let markerIndex = 0;
+
+      for (let index = 0; index < this.attractorCount; index++) {
+        const attractor = attractors[index];
+        const x = attractor.x;
+        const y = attractor.y;
+        this.attractorData.set([x, y, ATTRACTOR_STRENGTH, ATTRACTOR_RADIUS], index * FLOATS_PER_ATTRACTOR);
+
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x - ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x + ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y - ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y + ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1);
+      }
+
+      this.attractorVertexCount = markerIndex / FLOATS_PER_MARKER_VERTEX;
+      this.device.queue.writeBuffer(this.attractorBuffer, 0, this.attractorData);
+      this.device.queue.writeBuffer(this.attractorVertexBuffer, 0, this.attractorMarkerData);
     },
     createTrailTexture() {
       if (this.trailTexture !== null) {
@@ -373,7 +423,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     }
   };
 
-  setSpriteInteractionDistances(width, height);
   renderer.resize(width, height);
   return renderer;
 }
@@ -385,6 +434,18 @@ function createStorageBuffer(device, data) {
   });
   device.queue.writeBuffer(buffer, 0, data);
   return buffer;
+}
+
+function writeMarkerVertex(vertices, index, x, y, red, green, blue) {
+  vertices[index++] = x;
+  vertices[index++] = y;
+  vertices[index++] = 0;
+  vertices[index++] = 0;
+  vertices[index++] = red;
+  vertices[index++] = green;
+  vertices[index++] = blue;
+  vertices[index++] = 1;
+  return index;
 }
 
 async function loadWebgpuShaders() {

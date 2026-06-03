@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Swarm 3</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: black;
+        color: white;
+      }
+
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body,
+      canvas {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        background: black;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #stats {
+        position: fixed;
+        left: 14px;
+        top: 14px;
+        z-index: 2;
+        min-height: 20px;
+        padding: 5px 8px;
+        box-sizing: border-box;
+        color: #f4ff28;
+        background: rgb(0 0 0 / 58%);
+        border: 1px solid rgb(244 255 40 / 28%);
+        border-radius: 6px;
+        font: 13px/1.2 Arial, Helvetica, sans-serif;
+        pointer-events: none;
+        white-space: pre;
+        text-shadow: 0 1px 2px black;
+      }
+
+      #hint {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+        color: #7df9ff;
+        font: 500 42px/1.15 "Avenir Next", "Segoe UI", Verdana, sans-serif;
+        text-align: center;
+        pointer-events: none;
+        text-shadow:
+          0 0 8px rgb(125 249 255 / 35%),
+          0 0 18px rgb(255 255 40 / 20%);
+        transition:
+          opacity 2s ease,
+          transform 2s ease;
+      }
+
+      #hint.is-fading {
+        opacity: 0;
+        transform: translateY(48px);
+      }
+
+      #controls {
+        position: fixed;
+        left: 50%;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: max-content;
+        max-width: calc(100vw - 28px);
+        padding: 8px 10px;
+        transform: translateX(-50%);
+        box-sizing: border-box;
+        color: #eeeeee;
+        background: rgb(18 20 24 / 86%);
+        border: 1px solid rgb(255 255 255 / 20%);
+        border-radius: 8px;
+        box-shadow:
+          0 16px 42px rgb(0 0 0 / 50%),
+          inset 0 1px 0 rgb(255 255 255 / 8%);
+        backdrop-filter: blur(12px);
+        font: 13px/1.2 Arial, Helvetica, sans-serif;
+        user-select: none;
+      }
+
+      .control-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .control-field input:focus-visible {
+        outline: 2px solid #f4ff28;
+        outline-offset: 2px;
+      }
+
+      .control-field span {
+        color: #d2d2d2;
+        font-weight: 700;
+      }
+
+      .control-field input[type="number"] {
+        width: 88px;
+      }
+
+      .control-field input[type="number"] {
+        padding: 7px 8px;
+        color: #eeeeee;
+        background: rgb(0 0 0 / 38%);
+        border: 1px solid rgb(255 255 255 / 28%);
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      .control-field input[type="range"] {
+        width: 126px;
+        accent-color: #f4ff28;
+      }
+
+      .control-button {
+        min-width: 70px;
+        padding: 8px 12px;
+        color: #0d6efd;
+        border: 1px solid #0d6efd;
+        border-radius: 7px;
+        background: rgb(255 255 255 / 96%);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .control-button:hover {
+        border-color: #0b5ed7;
+        background: rgb(13 110 253 / 12%);
+      }
+
+      .control-button[aria-pressed="true"] {
+        color: white;
+        border-color: #0d6efd;
+        background: #0d6efd;
+      }
+
+      .control-button:focus-visible {
+        outline: 2px solid #f4ff28;
+        outline-offset: 2px;
+      }
+
+      @media (max-width: 640px) {
+        #hint {
+          font-size: 32px;
+        }
+
+        #controls {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          width: calc(100vw - 28px);
+        }
+
+        .control-field input[type="range"] {
+          width: min(130px, 34vw);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="swarm" aria-label="Pretty Swarm canvas"></canvas>
+    <div id="stats"></div>
+    <div id="hint">Click to drop attractors.</div>
+    <div id="controls">
+      <button id="pauseButton" class="control-button" type="button" aria-pressed="false">Pause</button>
+      <label class="control-field">
+        <span>Sprites</span>
+        <input id="spriteCount" type="number" min="10" max="300000" step="1000" />
+      </label>
+    </div>
+    <script type="module" src="./swarm.js"></script>
+  </body>
+</html>

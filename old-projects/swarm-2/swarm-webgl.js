@@ -1,4 +1,9 @@
-import { FLOATS_PER_VERTEX, loadShaders } from "./swarm-common.js";
+import {
+  FLOATS_PER_VERTEX,
+  LINE_FLOATS_PER_SPRITE,
+  loadShaders,
+  updateSprites as updateSpriteMotion
+} from "./swarm-common.js";
 
 export async function createWebglRenderer(canvas, width, height) {
   const gl = canvas.getContext("webgl", {
@@ -18,6 +23,7 @@ export async function createWebglRenderer(canvas, width, height) {
     height: 0,
     lineProgram,
     fadeProgram,
+    lineVertices: null,
     linePositionLocation: gl.getAttribLocation(lineProgram, "a_position"),
     lineColorLocation: gl.getAttribLocation(lineProgram, "a_color"),
     lineResolutionLocation: gl.getUniformLocation(lineProgram, "u_resolution"),
@@ -51,21 +57,25 @@ export async function createWebglRenderer(canvas, width, height) {
       this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
       this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     },
-    drawSprites(sprites, vertices, repelMode) {
+    updateSprites(sprites, elapsedMs, motionState) {
+      updateSpriteMotion(sprites, elapsedMs, motionState);
+    },
+    drawSprites(sprites, repelMode) {
+      this.ensureLineVertexCapacity(sprites.length);
       let vertexFloatCount = 0;
       for (const sprite of sprites) {
-        vertexFloatCount = writeLineVertices(sprite, vertices, vertexFloatCount, this.width, this.height, repelMode);
+        vertexFloatCount = writeLineVertices(sprite, this.lineVertices, vertexFloatCount, this.width, this.height, repelMode);
       }
-      this.drawLines(vertices, vertexFloatCount);
+      this.drawLines(vertexFloatCount);
     },
-    drawLines(vertices, vertexFloatCount) {
+    drawLines(vertexFloatCount) {
       if (vertexFloatCount === 0) {
         return;
       }
 
       this.gl.useProgram(this.lineProgram);
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.lineBuffer);
-      this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices.subarray(0, vertexFloatCount), this.gl.DYNAMIC_DRAW);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, this.lineVertices.subarray(0, vertexFloatCount), this.gl.DYNAMIC_DRAW);
       this.gl.enableVertexAttribArray(this.linePositionLocation);
       this.gl.vertexAttribPointer(this.linePositionLocation, 2, this.gl.FLOAT, false, FLOATS_PER_VERTEX * 4, 0);
       this.gl.enableVertexAttribArray(this.lineColorLocation);
@@ -76,6 +86,18 @@ export async function createWebglRenderer(canvas, width, height) {
     },
     finish() {
       this.gl.finish();
+    },
+    ensureLineVertexCapacity(spriteCount) {
+      if (this.lineVertices !== null && this.lineVertices.length >= spriteCount * LINE_FLOATS_PER_SPRITE) {
+        return;
+      }
+
+      this.lineVertices = new Float32Array(spriteCount * LINE_FLOATS_PER_SPRITE);
+    },
+    drawFrame(sprites, motionState, repelMode, elapsedMs, fadeAmount) {
+      this.fade(fadeAmount);
+      this.updateSprites(sprites, elapsedMs, motionState);
+      this.drawSprites(sprites, repelMode);
     }
   };
 
