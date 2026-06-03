@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swarm Benchmark</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #050506;
+        color: #f1f5f9;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #050506;
+      }
+
+      main {
+        width: min(1080px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 32px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: end;
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: grid;
+        gap: 5px;
+        color: #cbd5e1;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      input,
+      button {
+        box-sizing: border-box;
+        height: 36px;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      input {
+        width: 116px;
+        padding: 7px 9px;
+        color: #f8fafc;
+        background: #111827;
+        border: 1px solid #334155;
+      }
+
+      button {
+        padding: 0 14px;
+        color: #06111f;
+        background: #7df9ff;
+        border: 1px solid #7df9ff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.62;
+      }
+
+      #status {
+        min-height: 22px;
+        margin: 0 0 14px;
+        color: #f4ff28;
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+      }
+
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #1f2937;
+        text-align: right;
+      }
+
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+
+      th {
+        color: #cbd5e1;
+        background: #111827;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      td {
+        font-variant-numeric: tabular-nums;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .preview {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .preview canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        background: black;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          width: min(100vw - 20px, 540px);
+          padding-top: 16px;
+        }
+
+        .preview {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Swarm Benchmark</h1>
+      <div class="controls">
+        <label>
+          Sprites
+          <input id="spriteCount" type="number" min="10" step="1000" />
+        </label>
+        <label>
+          Frames
+          <input id="frameCount" type="number" min="10" step="10" />
+        </label>
+        <label>
+          Width
+          <input id="canvasWidth" type="number" min="160" step="80" />
+        </label>
+        <label>
+          Height
+          <input id="canvasHeight" type="number" min="120" step="60" />
+        </label>
+        <button id="runButton" type="button">Run</button>
+      </div>
+      <p id="status"></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Renderer</th>
+            <th>Total ms</th>
+            <th>ms/frame</th>
+            <th>FPS</th>
+            <th>Speedup</th>
+          </tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+      <div class="preview">
+        <canvas id="cpuCanvas" aria-label="CPU renderer preview"></canvas>
+        <canvas id="webglCanvas" aria-label="WebGL renderer preview"></canvas>
+      </div>
+    </main>
+    <script src="./swarm-benchmark.js?v=1"></script>
+  </body>
+</html>
