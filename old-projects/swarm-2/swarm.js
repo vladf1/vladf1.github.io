@@ -1048,10 +1048,10 @@ export function readFadeAmount(value) {
 }
 
 export function readRendererMode(value) {
-  if (value === RendererMode.cpu || value === RendererMode.webgpuCompute) {
+  if (value === RendererMode.cpu || value === RendererMode.webgl || value === RendererMode.webgpuCompute) {
     return value;
   }
-  return RendererMode.webgl;
+  return RendererMode.webgpuCompute;
 }
 
 export function randomBetween(random, min, max) {
