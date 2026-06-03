@@ -120,7 +120,7 @@
 
       .preview {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 12px;
         margin-top: 16px;
       }
@@ -182,12 +182,11 @@
         <tbody id="results"></tbody>
       </table>
       <div class="preview">
-        <canvas id="cpuCanvas" aria-label="CPU renderer preview"></canvas>
-        <canvas id="webglCanvas" aria-label="WebGL renderer preview"></canvas>
-        <canvas id="webgpuCanvas" aria-label="WebGPU renderer preview"></canvas>
-        <canvas id="webgpuComputeCanvas" aria-label="WebGPU compute renderer preview"></canvas>
+        <canvas id="cpuCanvas" aria-label="CPU bitmap preview"></canvas>
+        <canvas id="webglCanvas" aria-label="GPU draw WebGL preview"></canvas>
+        <canvas id="webgpuComputeCanvas" aria-label="GPU motion and draw preview"></canvas>
       </div>
     </main>
-    <script type="module" src="./swarm-benchmark.js?v=7"></script>
+    <script type="module" src="./swarm-benchmark.js?v=9"></script>
   </body>
 </html>
