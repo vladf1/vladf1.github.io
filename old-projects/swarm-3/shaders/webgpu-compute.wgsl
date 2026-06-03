@@ -104,7 +104,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
       }
     }
 
-    if (secondPull > 0.0 && randomUnit(index) < 0.18) {
+    let weakerChance = 0.08 + 0.20 * clamp(secondPull / max(strongestPull, 0.0001), 0.0, 1.0);
+    if (secondPull > 0.0 && randomUnit(index) < weakerChance) {
       attraction = secondAttraction;
     }
 

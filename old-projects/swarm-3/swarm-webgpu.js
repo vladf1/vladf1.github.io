@@ -5,7 +5,7 @@ const FLOATS_PER_ATTRACTOR = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
 const VERTICES_PER_ATTRACTOR_MARKER = 4;
 const ATTRACTOR_STRENGTH = 1;
-const ATTRACTOR_RADIUS = 960;
+const ATTRACTOR_RADIUS = 560;
 const ATTRACTOR_MARKER_SIZE = 10;
 
 function createWebgpuPresenter(device, format, shaderSource) {
