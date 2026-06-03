@@ -5,6 +5,7 @@ import {
   LINE_FLOATS_PER_SPRITE,
   RendererMode,
   createLineVertexBuffer,
+  createSprite,
   createSprites,
   setSpriteInteractionDistances,
   updateSprites
