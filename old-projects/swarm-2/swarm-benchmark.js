@@ -2,7 +2,6 @@ import {
   DEFAULT_FADE_AMOUNT,
   DEFAULT_SPRITE_COUNT,
   FADE_AMOUNT_PER_MS_SCALE,
-  FADE_FRAME_INTERVAL,
   createCpuRenderer,
   createLineVertexBuffer,
   createRandom,
@@ -90,19 +89,10 @@ async function runRendererBenchmark(name, createRenderer, canvas, config) {
   const sprites = createBenchmarkSprites(config);
   const vertices = createLineVertexBuffer(config.spriteCount);
   const motionState = createMotionState(config);
-  let fadeFramesElapsed = 0;
-  let fadeElapsedMs = 0;
   const started = performance.now();
 
   for (let frame = 0; frame < config.frameCount; frame++) {
-    fadeFramesElapsed++;
-    fadeElapsedMs += FIXED_ELAPSED_MS;
-    if (fadeFramesElapsed === FADE_FRAME_INTERVAL) {
-      renderer.fade(1 - config.fadeAmountPerMs * fadeElapsedMs);
-      fadeFramesElapsed = 0;
-      fadeElapsedMs = 0;
-    }
-
+    renderer.fade(1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS);
     updateSprites(sprites, FIXED_ELAPSED_MS, motionState);
     renderer.drawSprites(sprites, vertices, motionState.repelMode);
   }
@@ -121,20 +111,10 @@ async function runWebgpuComputeBenchmark(config) {
     return createSkippedResult("GPU motion + draw");
   }
 
-  let fadeFramesElapsed = 0;
-  let fadeElapsedMs = 0;
   const started = performance.now();
 
   for (let frame = 0; frame < config.frameCount; frame++) {
-    fadeFramesElapsed++;
-    fadeElapsedMs += FIXED_ELAPSED_MS;
-    let fadeAmount = null;
-    if (fadeFramesElapsed === FADE_FRAME_INTERVAL) {
-      fadeAmount = 1 - config.fadeAmountPerMs * fadeElapsedMs;
-      fadeFramesElapsed = 0;
-      fadeElapsedMs = 0;
-    }
-
+    const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
     renderer.drawFrame(FIXED_ELAPSED_MS, fadeAmount);
   }
 
