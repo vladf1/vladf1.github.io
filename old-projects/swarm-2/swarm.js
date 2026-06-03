@@ -686,6 +686,518 @@ export async function createWebgpuRenderer(canvas, width, height) {
   return renderer;
 }
 
+export async function createWebgpuComputeRenderer(canvas, width, height, sprites, motionState) {
+  if (!("gpu" in navigator)) {
+    return null;
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter === null) {
+    return null;
+  }
+
+  const device = await adapter.requestDevice();
+  const context = canvas.getContext("webgpu");
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  const spriteCount = sprites.length;
+  const computeVertexStride = 32;
+  const lineVertexCount = spriteCount * VERTICES_PER_LINE;
+  const positionData = new Float32Array(spriteCount * 4);
+  const motionAData = new Float32Array(spriteCount * 4);
+  const motionBData = new Float32Array(spriteCount * 4);
+  const motionCData = new Float32Array(spriteCount * 4);
+  const colorData = new Float32Array(spriteCount * 4);
+  const randomData = new Uint32Array(spriteCount);
+
+  for (let index = 0; index < spriteCount; index++) {
+    const sprite = sprites[index];
+    positionData.set([
+      sprite.xPosition,
+      sprite.yPosition,
+      sprite.previousX,
+      sprite.previousY
+    ], index * 4);
+    motionAData.set([
+      sprite.xVelocity,
+      sprite.yVelocity,
+      sprite.speed,
+      sprite.crazinessPerMs
+    ], index * 4);
+    motionBData.set([
+      sprite.offsetX,
+      sprite.offsetY,
+      sprite.gravityDistanceSquared,
+      sprite.angle
+    ], index * 4);
+    motionCData.set([
+      sprite.angleStepPerMs,
+      sprite.angleChangeMsLeft,
+      0,
+      0
+    ], index * 4);
+    colorData.set([
+      sprite.red,
+      sprite.green,
+      sprite.blue,
+      1
+    ], index * 4);
+    randomData[index] = (0x9e3779b9 ^ (index * 747796405) ^ spriteCount) >>> 0;
+  }
+
+  const computeShader = device.createShaderModule({
+    code: `
+      const TWO_PI = 6.283185307179586;
+      const WORKGROUP_SIZE = 256u;
+
+      struct SimParams {
+        canvasPointer: vec4f,
+        elapsedDistances: vec4f,
+        turn: vec4f,
+      };
+
+      struct LineVertex {
+        position: vec2f,
+        color: vec4f,
+      };
+
+      @group(0) @binding(0) var<storage, read_write> positions: array<vec4f>;
+      @group(0) @binding(1) var<storage, read_write> motionA: array<vec4f>;
+      @group(0) @binding(2) var<storage, read_write> motionB: array<vec4f>;
+      @group(0) @binding(3) var<storage, read_write> motionC: array<vec4f>;
+      @group(0) @binding(4) var<storage, read> colors: array<vec4f>;
+      @group(0) @binding(5) var<storage, read_write> randomStates: array<u32>;
+      @group(0) @binding(6) var<storage, read_write> vertices: array<LineVertex>;
+      @group(0) @binding(7) var<uniform> params: SimParams;
+
+      fn randomUnit(index: u32) -> f32 {
+        let next = randomStates[index] * 1664525u + 1013904223u;
+        randomStates[index] = next;
+        return f32(next) / 4294967296.0;
+      }
+
+      fn randomBetween(index: u32, minimum: f32, maximum: f32) -> f32 {
+        return minimum + (maximum - minimum) * randomUnit(index);
+      }
+
+      fn angleDifference(targetAngle: f32, currentAngle: f32) -> f32 {
+        let difference = targetAngle - currentAngle;
+        if (difference > 3.141592653589793) {
+          return difference - TWO_PI;
+        }
+        if (difference < -3.141592653589793) {
+          return difference + TWO_PI;
+        }
+        return difference;
+      }
+
+      @compute @workgroup_size(WORKGROUP_SIZE)
+      fn computeMain(@builtin(global_invocation_id) id: vec3u) {
+        let index = id.x;
+        let spriteCount = u32(params.turn.w);
+        if (index >= spriteCount) {
+          return;
+        }
+
+        let width = params.canvasPointer.x;
+        let height = params.canvasPointer.y;
+        let pointerX = params.canvasPointer.z;
+        let pointerY = params.canvasPointer.w;
+        let elapsedMs = params.elapsedDistances.x;
+        let minDistanceSquared = params.elapsedDistances.y;
+        let tooFarSquared = params.elapsedDistances.z;
+        let repelMode = params.elapsedDistances.w > 0.5;
+        let pointerTurnMs = params.turn.x;
+        let changeDirectionMs = params.turn.y;
+        let maxRandomAngleChange = params.turn.z;
+
+        var position = positions[index];
+        var velocity = motionA[index].xy;
+        let speed = motionA[index].z;
+        let crazinessPerMs = motionA[index].w;
+        let offset = motionB[index].xy;
+        let gravityDistanceSquared = motionB[index].z;
+        var angle = motionB[index].w;
+        var angleStepPerMs = motionC[index].x;
+        var angleChangeMsLeft = motionC[index].y;
+        let startPosition = position.xy;
+
+        if (pointerX > 0.0 && pointerY > 0.0) {
+          let pointerDelta = position.xy - vec2f(pointerX, pointerY);
+          let distanceSquared = dot(pointerDelta, pointerDelta);
+
+          if (repelMode && distanceSquared < minDistanceSquared) {
+            angleChangeMsLeft = 0.0;
+            angle = atan2(pointerDelta.y, pointerDelta.x);
+            velocity = vec2f(speed * cos(angle), speed * sin(angle));
+          } else if (distanceSquared > gravityDistanceSquared && distanceSquared < tooFarSquared) {
+            angleChangeMsLeft = pointerTurnMs;
+            let targetVector = vec2f(pointerX, pointerY) - position.xy + offset;
+            let newAngle = atan2(targetVector.y, targetVector.x);
+            angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
+          }
+        }
+
+        if (angleChangeMsLeft <= 0.0 && randomUnit(index) < crazinessPerMs * elapsedMs) {
+          let angleChange = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange);
+          angleStepPerMs = angleChange / changeDirectionMs;
+          angleChangeMsLeft = changeDirectionMs;
+        }
+
+        if (angleChangeMsLeft > 0.0) {
+          angle += angleStepPerMs * elapsedMs;
+          if (angle < 0.0) {
+            angle += TWO_PI;
+          } else if (angle >= TWO_PI) {
+            angle -= TWO_PI;
+          }
+          velocity = vec2f(speed * cos(angle), speed * sin(angle));
+          angleChangeMsLeft -= elapsedMs;
+        }
+
+        var nextPosition = position.xy + velocity * elapsedMs;
+        var bounced = false;
+
+        if (nextPosition.y < 0.0) {
+          position.y = 0.0;
+          velocity.y *= -1.0;
+          bounced = true;
+        } else if (nextPosition.y > height) {
+          position.y = height;
+          velocity.y *= -1.0;
+          bounced = true;
+        }
+
+        if (nextPosition.x < 0.0) {
+          position.x = 0.0;
+          velocity.x *= -1.0;
+          bounced = true;
+        } else if (nextPosition.x > width) {
+          position.x = width;
+          velocity.x *= -1.0;
+          bounced = true;
+        }
+
+        if (bounced) {
+          nextPosition = position.xy + velocity * elapsedMs;
+          angle = atan2(velocity.y, velocity.x);
+          angleChangeMsLeft = 0.0;
+        }
+
+        let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+        let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+        let color = colors[index];
+        vertices[index * 2u] = LineVertex(clampedStart, color);
+        vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+
+        positions[index] = vec4f(nextPosition, nextPosition);
+        motionA[index] = vec4f(velocity, speed, crazinessPerMs);
+        motionB[index] = vec4f(offset, gravityDistanceSquared, angle);
+        motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
+      }
+    `
+  });
+  const lineShader = device.createShaderModule({
+    code: `
+      struct Resolution {
+        size: vec2f,
+      };
+
+      @group(0) @binding(0) var<uniform> resolution: Resolution;
+
+      struct VertexInput {
+        @location(0) position: vec2f,
+        @location(1) color: vec4f,
+      };
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) color: vec4f,
+      };
+
+      @vertex
+      fn vertexMain(input: VertexInput) -> VertexOutput {
+        var output: VertexOutput;
+        let zeroToOne = input.position / resolution.size;
+        let clipSpace = zeroToOne * 2.0 - vec2f(1.0, 1.0);
+        output.position = vec4f(clipSpace.x, -clipSpace.y, 0.0, 1.0);
+        output.color = input.color;
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+        return input.color;
+      }
+    `
+  });
+  const fadeShader = device.createShaderModule({
+    code: `
+      struct Fade {
+        alpha: f32,
+      };
+
+      @group(0) @binding(0) var<uniform> fade: Fade;
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+      };
+
+      @vertex
+      fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+        var positions = array<vec2f, 6>(
+          vec2f(-1.0, -1.0),
+          vec2f(1.0, -1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(1.0, -1.0),
+          vec2f(1.0, 1.0)
+        );
+        var output: VertexOutput;
+        output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain() -> @location(0) vec4f {
+        return vec4f(0.0, 0.0, 0.0, fade.alpha);
+      }
+    `
+  });
+  const computePipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: computeShader,
+      entryPoint: "computeMain"
+    }
+  });
+  const linePipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: lineShader,
+      entryPoint: "vertexMain",
+      buffers: [{
+        arrayStride: computeVertexStride,
+        attributes: [
+          {
+            shaderLocation: 0,
+            offset: 0,
+            format: "float32x2"
+          },
+          {
+            shaderLocation: 1,
+            offset: 16,
+            format: "float32x4"
+          }
+        ]
+      }]
+    },
+    fragment: {
+      module: lineShader,
+      entryPoint: "fragmentMain",
+      targets: [{ format }]
+    },
+    primitive: {
+      topology: "line-list"
+    }
+  });
+  const fadePipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: fadeShader,
+      entryPoint: "vertexMain"
+    },
+    fragment: {
+      module: fadeShader,
+      entryPoint: "fragmentMain",
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: "src-alpha",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          },
+          alpha: {
+            srcFactor: "one",
+            dstFactor: "zero",
+            operation: "add"
+          }
+        }
+      }]
+    },
+    primitive: {
+      topology: "triangle-list"
+    }
+  });
+  const positionBuffer = createStorageBuffer(device, positionData);
+  const motionABuffer = createStorageBuffer(device, motionAData);
+  const motionBBuffer = createStorageBuffer(device, motionBData);
+  const motionCBuffer = createStorageBuffer(device, motionCData);
+  const colorBuffer = createStorageBuffer(device, colorData);
+  const randomBuffer = createStorageBuffer(device, randomData);
+  const vertexBuffer = device.createBuffer({
+    size: lineVertexCount * computeVertexStride,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+  });
+  const paramsBuffer = device.createBuffer({
+    size: 48,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  const resolutionBuffer = device.createBuffer({
+    size: 8,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  const fadeBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  const computeBindGroup = device.createBindGroup({
+    layout: computePipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: positionBuffer } },
+      { binding: 1, resource: { buffer: motionABuffer } },
+      { binding: 2, resource: { buffer: motionBBuffer } },
+      { binding: 3, resource: { buffer: motionCBuffer } },
+      { binding: 4, resource: { buffer: colorBuffer } },
+      { binding: 5, resource: { buffer: randomBuffer } },
+      { binding: 6, resource: { buffer: vertexBuffer } },
+      { binding: 7, resource: { buffer: paramsBuffer } }
+    ]
+  });
+  const lineBindGroup = device.createBindGroup({
+    layout: linePipeline.getBindGroupLayout(0),
+    entries: [{
+      binding: 0,
+      resource: { buffer: resolutionBuffer }
+    }]
+  });
+  const fadeBindGroup = device.createBindGroup({
+    layout: fadePipeline.getBindGroupLayout(0),
+    entries: [{
+      binding: 0,
+      resource: { buffer: fadeBuffer }
+    }]
+  });
+  const renderer = {
+    canvas,
+    context,
+    device,
+    format,
+    width: 0,
+    height: 0,
+    spriteCount,
+    motionState,
+    computePipeline,
+    linePipeline,
+    fadePipeline,
+    computeBindGroup,
+    lineBindGroup,
+    fadeBindGroup,
+    vertexBuffer,
+    paramsBuffer,
+    resolutionBuffer,
+    fadeBuffer,
+    resize(nextWidth, nextHeight) {
+      this.width = nextWidth;
+      this.height = nextHeight;
+      this.canvas.width = nextWidth;
+      this.canvas.height = nextHeight;
+      this.context.configure({
+        device: this.device,
+        format: this.format,
+        alphaMode: "opaque"
+      });
+      this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
+      this.clear();
+    },
+    clear() {
+      const encoder = this.device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+        }]
+      });
+      pass.end();
+      this.device.queue.submit([encoder.finish()]);
+    },
+    drawFrame(elapsedMs, fadeAmount) {
+      this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
+        this.width,
+        this.height,
+        this.motionState.pointerX,
+        this.motionState.pointerY,
+        elapsedMs,
+        Sprite.minDistanceSquared,
+        Sprite.tooFarSquared,
+        this.motionState.repelMode ? 1 : 0,
+        Sprite.pointerTurnMs,
+        Sprite.changeDirectionMs,
+        Sprite.maxRandomAngleChange,
+        this.spriteCount
+      ]));
+
+      if (fadeAmount !== null) {
+        const fadeAlpha = Math.max(0, Math.min(1, 1 - fadeAmount));
+        this.device.queue.writeBuffer(this.fadeBuffer, 0, new Float32Array([fadeAlpha]));
+      }
+
+      const encoder = this.device.createCommandEncoder();
+      if (fadeAmount !== null) {
+        const fadePass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: this.context.getCurrentTexture().createView(),
+            loadOp: "load",
+            storeOp: "store"
+          }]
+        });
+        fadePass.setPipeline(this.fadePipeline);
+        fadePass.setBindGroup(0, this.fadeBindGroup);
+        fadePass.draw(6);
+        fadePass.end();
+      }
+
+      const computePass = encoder.beginComputePass();
+      computePass.setPipeline(this.computePipeline);
+      computePass.setBindGroup(0, this.computeBindGroup);
+      computePass.dispatchWorkgroups(Math.ceil(this.spriteCount / 256));
+      computePass.end();
+
+      const linePass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "load",
+          storeOp: "store"
+        }]
+      });
+      linePass.setPipeline(this.linePipeline);
+      linePass.setBindGroup(0, this.lineBindGroup);
+      linePass.setVertexBuffer(0, this.vertexBuffer);
+      linePass.draw(lineVertexCount);
+      linePass.end();
+      this.device.queue.submit([encoder.finish()]);
+    },
+    finish() {
+      return this.device.queue.onSubmittedWorkDone();
+    }
+  };
+
+  setSpriteInteractionDistances(width, height);
+  renderer.resize(width, height);
+  return renderer;
+}
+
+function createStorageBuffer(device, data) {
+  const buffer = device.createBuffer({
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  });
+  device.queue.writeBuffer(buffer, 0, data);
+  return buffer;
+}
+
 export function readSpriteCount(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SPRITE_COUNT;
