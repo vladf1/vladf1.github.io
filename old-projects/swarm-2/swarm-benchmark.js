@@ -7,9 +7,10 @@ import {
   createLineVertexBuffer,
   createRandom,
   createSprites,
+  createWebgpuRenderer,
   createWebglRenderer,
   updateSprites
-} from "./swarm.js?v=39";
+} from "./swarm.js?v=41";
 
 const DEFAULT_FRAME_COUNT = 180;
 const DEFAULT_WIDTH = 800;
@@ -27,6 +28,7 @@ const status = document.querySelector("#status");
 const results = document.querySelector("#results");
 const cpuCanvas = document.querySelector("#cpuCanvas");
 const webglCanvas = document.querySelector("#webglCanvas");
+const webgpuCanvas = document.querySelector("#webgpuCanvas");
 
 spriteCountInput.value = String(readPositiveInteger(params.get("NumberOfSprites"), DEFAULT_SPRITE_COUNT));
 frameCountInput.value = String(readPositiveInteger(params.get("Frames"), DEFAULT_FRAME_COUNT));
@@ -53,13 +55,17 @@ async function runBenchmark() {
   addResultRow(motionResult, null);
   await waitForPaint();
 
-  const cpuResult = runRendererBenchmark("Old CPU ImageData", createCpuRenderer, cpuCanvas, config);
+  const cpuResult = await runRendererBenchmark("Old CPU ImageData", createCpuRenderer, cpuCanvas, config);
   addResultRow(cpuResult, cpuResult);
   await waitForPaint();
 
-  const webglResult = runRendererBenchmark("New WebGL lines", createWebglRenderer, webglCanvas, config);
+  const webglResult = await runRendererBenchmark("New WebGL lines", createWebglRenderer, webglCanvas, config);
   addResultRow(webglResult, cpuResult);
-  status.textContent = `Done. WebGL was ${(cpuResult.msPerFrame / webglResult.msPerFrame).toFixed(2)}x faster than the old CPU renderer.`;
+  await waitForPaint();
+
+  const webgpuResult = await runRendererBenchmark("WebGPU lines", createWebgpuRenderer, webgpuCanvas, config);
+  addResultRow(webgpuResult, cpuResult);
+  status.textContent = `Done. WebGL was ${formatSpeedup(cpuResult, webglResult)} and WebGPU was ${webgpuResult.supported ? formatSpeedup(cpuResult, webgpuResult) : "unavailable"} compared with the old CPU renderer.`;
   runButton.disabled = false;
 }
 
@@ -75,8 +81,12 @@ function runMotionBenchmark(config) {
   return createResult("Motion only", performance.now() - started, config);
 }
 
-function runRendererBenchmark(name, createRenderer, canvas, config) {
-  const renderer = createRenderer(canvas, config.width, config.height);
+async function runRendererBenchmark(name, createRenderer, canvas, config) {
+  const renderer = await createRenderer(canvas, config.width, config.height);
+  if (renderer === null) {
+    return createSkippedResult(name);
+  }
+
   const sprites = createBenchmarkSprites(config);
   const vertices = createLineVertexBuffer(config.spriteCount);
   const motionState = createMotionState(config);
@@ -98,7 +108,7 @@ function runRendererBenchmark(name, createRenderer, canvas, config) {
   }
 
   if ("finish" in renderer) {
-    renderer.finish();
+    await renderer.finish();
   }
   return createResult(name, performance.now() - started, config);
 }
@@ -123,18 +133,29 @@ function createResult(name, totalMs, config) {
     name,
     totalMs,
     msPerFrame,
-    fps: 1000 / msPerFrame
+    fps: 1000 / msPerFrame,
+    supported: true
+  };
+}
+
+function createSkippedResult(name) {
+  return {
+    name,
+    totalMs: null,
+    msPerFrame: null,
+    fps: null,
+    supported: false
   };
 }
 
 function addResultRow(result, cpuResult) {
   const row = document.createElement("tr");
-  const speedup = cpuResult === null ? "--" : `${(cpuResult.msPerFrame / result.msPerFrame).toFixed(2)}x`;
+  const speedup = cpuResult === null || !result.supported ? "--" : `${(cpuResult.msPerFrame / result.msPerFrame).toFixed(2)}x`;
   row.innerHTML = `
     <td>${result.name}</td>
-    <td>${formatNumber(result.totalMs)}</td>
-    <td>${formatNumber(result.msPerFrame)}</td>
-    <td>${formatNumber(result.fps)}</td>
+    <td>${formatResultNumber(result.totalMs)}</td>
+    <td>${formatResultNumber(result.msPerFrame)}</td>
+    <td>${formatResultNumber(result.fps)}</td>
     <td>${speedup}</td>
   `;
   results.append(row);
@@ -176,4 +197,13 @@ function formatNumber(value) {
   return value.toLocaleString(undefined, {
     maximumFractionDigits: 2
   });
+}
+
+function formatResultNumber(value) {
+  return value === null ? "unavailable" : formatNumber(value);
+}
+
+function formatSpeedup(cpuResult, result) {
+  const speedup = cpuResult.msPerFrame / result.msPerFrame;
+  return speedup >= 1 ? `${speedup.toFixed(2)}x faster` : `${(1 / speedup).toFixed(2)}x slower`;
 }

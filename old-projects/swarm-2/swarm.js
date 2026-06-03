@@ -398,6 +398,294 @@ export function createWebglRenderer(canvas, width, height) {
   return renderer;
 }
 
+export async function createWebgpuRenderer(canvas, width, height) {
+  if (!("gpu" in navigator)) {
+    return null;
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter === null) {
+    return null;
+  }
+
+  const device = await adapter.requestDevice();
+  const context = canvas.getContext("webgpu");
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  const lineShader = device.createShaderModule({
+    code: `
+      struct Resolution {
+        size: vec2f,
+      };
+
+      @group(0) @binding(0) var<uniform> resolution: Resolution;
+
+      struct VertexInput {
+        @location(0) position: vec2f,
+        @location(1) color: vec3f,
+      };
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) color: vec3f,
+      };
+
+      @vertex
+      fn vertexMain(input: VertexInput) -> VertexOutput {
+        var output: VertexOutput;
+        let zeroToOne = input.position / resolution.size;
+        let clipSpace = zeroToOne * 2.0 - vec2f(1.0, 1.0);
+        output.position = vec4f(clipSpace.x, -clipSpace.y, 0.0, 1.0);
+        output.color = input.color;
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+        return vec4f(input.color, 1.0);
+      }
+    `
+  });
+  const fadeShader = device.createShaderModule({
+    code: `
+      struct Fade {
+        alpha: f32,
+      };
+
+      @group(0) @binding(0) var<uniform> fade: Fade;
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+      };
+
+      @vertex
+      fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+        var positions = array<vec2f, 6>(
+          vec2f(-1.0, -1.0),
+          vec2f(1.0, -1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(1.0, -1.0),
+          vec2f(1.0, 1.0)
+        );
+        var output: VertexOutput;
+        output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain() -> @location(0) vec4f {
+        return vec4f(0.0, 0.0, 0.0, fade.alpha);
+      }
+    `
+  });
+  const linePipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: lineShader,
+      entryPoint: "vertexMain",
+      buffers: [{
+        arrayStride: FLOATS_PER_VERTEX * 4,
+        attributes: [
+          {
+            shaderLocation: 0,
+            offset: 0,
+            format: "float32x2"
+          },
+          {
+            shaderLocation: 1,
+            offset: 2 * 4,
+            format: "float32x3"
+          }
+        ]
+      }]
+    },
+    fragment: {
+      module: lineShader,
+      entryPoint: "fragmentMain",
+      targets: [{ format }]
+    },
+    primitive: {
+      topology: "line-list"
+    }
+  });
+  const fadePipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: fadeShader,
+      entryPoint: "vertexMain"
+    },
+    fragment: {
+      module: fadeShader,
+      entryPoint: "fragmentMain",
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: "src-alpha",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          },
+          alpha: {
+            srcFactor: "one",
+            dstFactor: "zero",
+            operation: "add"
+          }
+        }
+      }]
+    },
+    primitive: {
+      topology: "triangle-list"
+    }
+  });
+  const resolutionBuffer = device.createBuffer({
+    size: 8,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  const fadeBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  const lineBindGroup = device.createBindGroup({
+    layout: linePipeline.getBindGroupLayout(0),
+    entries: [{
+      binding: 0,
+      resource: { buffer: resolutionBuffer }
+    }]
+  });
+  const fadeBindGroup = device.createBindGroup({
+    layout: fadePipeline.getBindGroupLayout(0),
+    entries: [{
+      binding: 0,
+      resource: { buffer: fadeBuffer }
+    }]
+  });
+  const renderer = {
+    canvas,
+    context,
+    device,
+    format,
+    width: 0,
+    height: 0,
+    linePipeline,
+    fadePipeline,
+    lineBindGroup,
+    fadeBindGroup,
+    resolutionBuffer,
+    fadeBuffer,
+    vertexBuffer: null,
+    vertexBufferSize: 0,
+    commandEncoder: null,
+    resize(nextWidth, nextHeight) {
+      this.width = nextWidth;
+      this.height = nextHeight;
+      this.canvas.width = nextWidth;
+      this.canvas.height = nextHeight;
+      this.context.configure({
+        device: this.device,
+        format: this.format,
+        alphaMode: "opaque"
+      });
+      this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
+      this.clear();
+    },
+    clear() {
+      const encoder = this.device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+        }]
+      });
+      pass.end();
+      this.device.queue.submit([encoder.finish()]);
+    },
+    fade(amount) {
+      const fadeAlpha = Math.max(0, Math.min(1, 1 - amount));
+      if (fadeAlpha <= 0) {
+        return;
+      }
+
+      this.device.queue.writeBuffer(this.fadeBuffer, 0, new Float32Array([fadeAlpha]));
+      const pass = this.getCommandEncoder().beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "load",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.fadePipeline);
+      pass.setBindGroup(0, this.fadeBindGroup);
+      pass.draw(6);
+      pass.end();
+    },
+    drawSprites(sprites, vertices, repelMode) {
+      let vertexFloatCount = 0;
+      for (const sprite of sprites) {
+        vertexFloatCount = sprite.writeLineVertices(vertices, vertexFloatCount, this.width, this.height, repelMode);
+      }
+      this.drawLines(vertices, vertexFloatCount);
+    },
+    drawLines(vertices, vertexFloatCount) {
+      if (vertexFloatCount === 0) {
+        return;
+      }
+
+      const byteLength = vertexFloatCount * 4;
+      this.ensureVertexBuffer(byteLength);
+      this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices.buffer, vertices.byteOffset, byteLength);
+      const pass = this.getCommandEncoder().beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "load",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.linePipeline);
+      pass.setBindGroup(0, this.lineBindGroup);
+      pass.setVertexBuffer(0, this.vertexBuffer);
+      pass.draw(vertexFloatCount / FLOATS_PER_VERTEX);
+      pass.end();
+      this.submitCommandEncoder();
+    },
+    ensureVertexBuffer(byteLength) {
+      if (this.vertexBuffer !== null && this.vertexBufferSize >= byteLength) {
+        return;
+      }
+
+      if (this.vertexBuffer !== null) {
+        this.vertexBuffer.destroy();
+      }
+      this.vertexBufferSize = byteLength;
+      this.vertexBuffer = this.device.createBuffer({
+        size: byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+    },
+    getCommandEncoder() {
+      if (this.commandEncoder === null) {
+        this.commandEncoder = this.device.createCommandEncoder();
+      }
+      return this.commandEncoder;
+    },
+    submitCommandEncoder() {
+      if (this.commandEncoder === null) {
+        return;
+      }
+      this.device.queue.submit([this.commandEncoder.finish()]);
+      this.commandEncoder = null;
+    },
+    finish() {
+      this.submitCommandEncoder();
+      return this.device.queue.onSubmittedWorkDone();
+    }
+  };
+
+  renderer.resize(width, height);
+  return renderer;
+}
+
 export function readSpriteCount(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SPRITE_COUNT;
