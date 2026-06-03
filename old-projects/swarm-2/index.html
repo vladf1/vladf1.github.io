@@ -110,7 +110,8 @@
         white-space: nowrap;
       }
 
-      .control-field input:focus-visible {
+      .control-field input:focus-visible,
+      .control-field select:focus-visible {
         outline: 2px solid #f4ff28;
         outline-offset: 2px;
       }
@@ -122,6 +123,14 @@
 
       .control-field input[type="number"] {
         width: 88px;
+      }
+
+      .control-field select {
+        width: 144px;
+      }
+
+      .control-field input[type="number"],
+      .control-field select {
         padding: 7px 8px;
         color: #eeeeee;
         background: rgb(0 0 0 / 38%);
@@ -194,7 +203,16 @@
         <span>Trail fade</span>
         <input id="fadeAmount" type="range" min="0.02" max="0.25" step="0.01" />
       </label>
+      <label class="control-field">
+        <span>Renderer</span>
+        <select id="rendererMode">
+          <option value="webgl">WebGL</option>
+          <option value="cpu">CPU bitmap</option>
+          <option value="webgpu">WebGPU</option>
+          <option value="webgpu-compute">WebGPU compute</option>
+        </select>
+      </label>
     </div>
-    <script type="module" src="./swarm.js?v=43"></script>
+    <script type="module" src="./swarm.js?v=44"></script>
   </body>
 </html>

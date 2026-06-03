@@ -9,6 +9,12 @@ export const TWO_PI = Math.PI * 2;
 export const FLOATS_PER_VERTEX = 5;
 export const VERTICES_PER_LINE = 2;
 export const LINE_FLOATS_PER_SPRITE = FLOATS_PER_VERTEX * VERTICES_PER_LINE;
+export const RendererMode = {
+  cpu: "cpu",
+  webgl: "webgl",
+  webgpu: "webgpu",
+  webgpuCompute: "webgpu-compute"
+};
 
 export class Sprite {
   static minColor = 40;
@@ -1208,6 +1214,13 @@ export function readFadeAmount(value) {
   return Number.isFinite(parsed) ? Math.max(0.02, Math.min(0.25, parsed)) : DEFAULT_FADE_AMOUNT;
 }
 
+export function readRendererMode(value) {
+  if (value === RendererMode.cpu || value === RendererMode.webgpu || value === RendererMode.webgpuCompute) {
+    return value;
+  }
+  return RendererMode.webgl;
+}
+
 export function randomBetween(random, min, max) {
   return min + (max - min) * random();
 }
@@ -1220,21 +1233,27 @@ export function createRandom(seed) {
   };
 }
 
-export function startSwarmApp() {
-  const canvas = document.querySelector("#swarm");
+export async function startSwarmApp() {
+  let canvas = document.querySelector("#swarm");
   const stats = document.querySelector("#stats");
   const pauseButton = document.querySelector("#pauseButton");
   const spriteCountInput = document.querySelector("#spriteCount");
   const fadeAmountInput = document.querySelector("#fadeAmount");
+  const rendererModeInput = document.querySelector("#rendererMode");
   let hint = document.querySelector("#hint");
 
   const params = new URLSearchParams(location.search);
   let spriteCount = readSpriteCount(params.get("NumberOfSprites"));
   let fadeAmount = readFadeAmount(params.get("FadeAmount"));
+  let rendererMode = readRendererMode(params.get("Renderer"));
   let fadeAmountPerMs = fadeAmount * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
   let renderer = null;
+  let rendererReady = false;
+  let rendererGeneration = 0;
+  let activeContextType = null;
+  let canvasEventsAbortController = null;
   let lineVertices = null;
   let sprites = [];
   let pointerX = -1;
@@ -1256,23 +1275,28 @@ export function startSwarmApp() {
     repelMode
   };
 
-  function resize() {
+  async function resize() {
     const rect = canvas.getBoundingClientRect();
     canvasWidth = Math.max(1, Math.floor(rect.width));
     canvasHeight = Math.max(1, Math.floor(rect.height));
     motionState.width = canvasWidth;
     motionState.height = canvasHeight;
     setSpriteInteractionDistances(canvasWidth, canvasHeight);
-    resetDrawingSurface();
 
     if (sprites.length === 0) {
       recreateSprites();
     }
+    await resetDrawingSurface();
   }
 
   function renderFrame(now) {
     pendingAnimationFrameId = 0;
     if (paused) {
+      return;
+    }
+    if (!rendererReady || renderer === null) {
+      stats.textContent = "Loading renderer...";
+      pendingAnimationFrameId = requestAnimationFrame(renderFrame);
       return;
     }
 
@@ -1287,14 +1311,22 @@ export function startSwarmApp() {
 
     fadeFramesElapsed++;
     fadeElapsedMs += elapsedMs;
+    let frameFadeAmount = null;
     if (fadeFramesElapsed === FADE_FRAME_INTERVAL) {
-      renderer.fade(1 - fadeAmountPerMs * fadeElapsedMs);
+      frameFadeAmount = 1 - fadeAmountPerMs * fadeElapsedMs;
       fadeFramesElapsed = 0;
       fadeElapsedMs = 0;
     }
 
-    updateSprites(sprites, elapsedMs, motionState);
-    renderer.drawSprites(sprites, lineVertices, repelMode);
+    if (rendererMode === RendererMode.webgpuCompute) {
+      renderer.drawFrame(elapsedMs, frameFadeAmount);
+    } else {
+      if (frameFadeAmount !== null) {
+        renderer.fade(frameFadeAmount);
+      }
+      updateSprites(sprites, elapsedMs, motionState);
+      renderer.drawSprites(sprites, lineVertices, repelMode);
+    }
 
     stats.textContent = `FPS: ${fps ?? "--"}`;
     framesRendered++;
@@ -1306,6 +1338,7 @@ export function startSwarmApp() {
     pauseButton.setAttribute("aria-pressed", String(paused));
     spriteCountInput.value = String(spriteCount);
     fadeAmountInput.value = String(fadeAmount);
+    rendererModeInput.value = rendererMode;
   }
 
   function setPaused(value) {
@@ -1333,6 +1366,9 @@ export function startSwarmApp() {
     spriteCount = nextSpriteCount;
     spriteCountInput.value = String(spriteCount);
     resizeSpritePool();
+    if (rendererMode === RendererMode.webgpuCompute) {
+      resetDrawingSurface();
+    }
     writeConfigToUrl();
   }
 
@@ -1340,6 +1376,20 @@ export function startSwarmApp() {
     fadeAmount = readFadeAmount(value);
     fadeAmountPerMs = fadeAmount * FADE_AMOUNT_PER_MS_SCALE;
     fadeAmountInput.value = String(fadeAmount);
+    writeConfigToUrl();
+  }
+
+  async function setRendererMode(value) {
+    const nextRendererMode = readRendererMode(value);
+    if (nextRendererMode === rendererMode) {
+      rendererModeInput.value = rendererMode;
+      return;
+    }
+
+    rendererMode = nextRendererMode;
+    rendererModeInput.value = rendererMode;
+    recreateSprites();
+    await resetDrawingSurface();
     writeConfigToUrl();
   }
 
@@ -1361,25 +1411,72 @@ export function startSwarmApp() {
     ensureLineVertexCapacity();
   }
 
-  function resetDrawingSurface() {
-    if (renderer === null) {
-      renderer = createWebglRenderer(canvas, canvasWidth, canvasHeight);
-    } else {
-      renderer.resize(canvasWidth, canvasHeight);
-    }
+  async function resetDrawingSurface() {
+    const generation = rendererGeneration + 1;
+    rendererGeneration = generation;
+    rendererReady = false;
     ensureLineVertexCapacity();
+    const nextContextType = getRendererContextType(rendererMode);
+    if (activeContextType !== null && activeContextType !== nextContextType) {
+      replaceCanvasElement();
+    }
+    renderer = await createRendererForMode(rendererMode);
+    if (generation !== rendererGeneration) {
+      return;
+    }
+    if (renderer === null) {
+      rendererMode = RendererMode.webgl;
+      rendererModeInput.value = rendererMode;
+      if (nextContextType !== getRendererContextType(rendererMode)) {
+        replaceCanvasElement();
+      }
+      renderer = await createRendererForMode(rendererMode);
+    }
+    activeContextType = getRendererContextType(rendererMode);
     lastAnimated = 0;
     lastTimed = performance.now();
     framesRendered = 0;
     fadeFramesElapsed = 0;
     fadeElapsedMs = 0;
     fps = null;
+    rendererReady = true;
+  }
+
+  async function createRendererForMode(mode) {
+    if (mode === RendererMode.cpu) {
+      return createCpuRenderer(canvas, canvasWidth, canvasHeight);
+    }
+    if (mode === RendererMode.webgpu) {
+      return createWebgpuRenderer(canvas, canvasWidth, canvasHeight);
+    }
+    if (mode === RendererMode.webgpuCompute) {
+      return createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, sprites, motionState);
+    }
+    return createWebglRenderer(canvas, canvasWidth, canvasHeight);
+  }
+
+  function getRendererContextType(mode) {
+    if (mode === RendererMode.cpu) {
+      return "2d";
+    }
+    if (mode === RendererMode.webgpu || mode === RendererMode.webgpuCompute) {
+      return "webgpu";
+    }
+    return "webgl";
+  }
+
+  function replaceCanvasElement() {
+    const nextCanvas = canvas.cloneNode(false);
+    canvas.replaceWith(nextCanvas);
+    canvas = nextCanvas;
+    bindCanvasEvents();
   }
 
   function writeConfigToUrl() {
     const query = new URLSearchParams();
     query.set("NumberOfSprites", String(spriteCount));
     query.set("FadeAmount", String(fadeAmount));
+    query.set("Renderer", rendererMode);
     history.replaceState(null, "", `${location.pathname}?${query}`);
   }
 
@@ -1423,36 +1520,50 @@ export function startSwarmApp() {
     lineVertices = createLineVertexBuffer(spriteCount);
   }
 
-  addEventListener("resize", resize);
+  addEventListener("resize", () => {
+    resize();
+  });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", resize);
+    window.visualViewport.addEventListener("resize", () => {
+      resize();
+    });
   }
   addEventListener("keydown", handleKeyDown);
-  canvas.addEventListener("pointermove", updatePointer);
-  canvas.addEventListener("pointerleave", clearPointer);
-  canvas.addEventListener("pointerdown", event => {
-    updatePointer(event);
-    repelMode = true;
-    motionState.repelMode = repelMode;
-    canvas.setPointerCapture(event.pointerId);
-  });
-  canvas.addEventListener("pointerup", event => {
-    repelMode = false;
-    motionState.repelMode = repelMode;
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
-    }
-  });
-  canvas.addEventListener("pointercancel", clearPointer);
+  bindCanvasEvents();
   pauseButton.addEventListener("click", () => setPaused(!paused));
   spriteCountInput.addEventListener("input", () => setSpriteCount(spriteCountInput.value));
   spriteCountInput.addEventListener("change", () => setSpriteCount(spriteCountInput.value));
   fadeAmountInput.addEventListener("input", () => setFadeAmount(fadeAmountInput.value));
+  rendererModeInput.addEventListener("change", () => {
+    setRendererMode(rendererModeInput.value);
+  });
 
   syncControls();
   writeConfigToUrl();
-  resize();
+  await resize();
   startAnimation();
+
+  function bindCanvasEvents() {
+    canvasEventsAbortController?.abort();
+    canvasEventsAbortController = new AbortController();
+    const options = { signal: canvasEventsAbortController.signal };
+    canvas.addEventListener("pointermove", updatePointer, options);
+    canvas.addEventListener("pointerleave", clearPointer, options);
+    canvas.addEventListener("pointerdown", event => {
+      updatePointer(event);
+      repelMode = true;
+      motionState.repelMode = repelMode;
+      canvas.setPointerCapture(event.pointerId);
+    }, options);
+    canvas.addEventListener("pointerup", event => {
+      repelMode = false;
+      motionState.repelMode = repelMode;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    }, options);
+    canvas.addEventListener("pointercancel", clearPointer, options);
+  }
 }
 
 function isControlElement(target) {
