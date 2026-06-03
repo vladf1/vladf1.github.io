@@ -680,7 +680,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
 
         let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
         let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-        let color = colors[index];
+        let color = select(colors[index], vec4f(1.0, 1.0, 1.0, 1.0), repelMode);
         vertices[index * 2u] = LineVertex(clampedStart, color);
         vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 
