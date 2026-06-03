@@ -404,6 +404,84 @@ export function createWebglRenderer(canvas, width, height) {
   return renderer;
 }
 
+function createWebgpuPresenter(device, format) {
+  const shader = device.createShaderModule({
+    code: `
+      @group(0) @binding(0) var trailSampler: sampler;
+      @group(0) @binding(1) var trailTexture: texture_2d<f32>;
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) texCoord: vec2f,
+      };
+
+      @vertex
+      fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+        var positions = array<vec2f, 6>(
+          vec2f(-1.0, -1.0),
+          vec2f(1.0, -1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(-1.0, 1.0),
+          vec2f(1.0, -1.0),
+          vec2f(1.0, 1.0)
+        );
+        var texCoords = array<vec2f, 6>(
+          vec2f(0.0, 1.0),
+          vec2f(1.0, 1.0),
+          vec2f(0.0, 0.0),
+          vec2f(0.0, 0.0),
+          vec2f(1.0, 1.0),
+          vec2f(1.0, 0.0)
+        );
+        var output: VertexOutput;
+        output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+        output.texCoord = texCoords[vertexIndex];
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+        return textureSample(trailTexture, trailSampler, input.texCoord);
+      }
+    `
+  });
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: shader,
+      entryPoint: "vertexMain"
+    },
+    fragment: {
+      module: shader,
+      entryPoint: "fragmentMain",
+      targets: [{ format }]
+    },
+    primitive: {
+      topology: "triangle-list"
+    }
+  });
+  const sampler = device.createSampler({
+    magFilter: "nearest",
+    minFilter: "nearest"
+  });
+  return {
+    pipeline,
+    sampler
+  };
+}
+
+function createWebgpuTrailTexture(device, format, width, height) {
+  const texture = device.createTexture({
+    size: [width, height],
+    format,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+  });
+  return {
+    texture,
+    view: texture.createView()
+  };
+}
+
 export async function createWebgpuRenderer(canvas, width, height) {
   if (!("gpu" in navigator)) {
     return null;
@@ -551,6 +629,7 @@ export async function createWebgpuRenderer(canvas, width, height) {
     size: 4,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
+  const presenter = createWebgpuPresenter(device, format);
   const lineBindGroup = device.createBindGroup({
     layout: linePipeline.getBindGroupLayout(0),
     entries: [{
@@ -578,6 +657,11 @@ export async function createWebgpuRenderer(canvas, width, height) {
     fadeBindGroup,
     resolutionBuffer,
     fadeBuffer,
+    presentPipeline: presenter.pipeline,
+    presentSampler: presenter.sampler,
+    presentBindGroup: null,
+    trailTexture: null,
+    trailView: null,
     vertexBuffer: null,
     vertexBufferSize: 0,
     commandEncoder: null,
@@ -592,19 +676,21 @@ export async function createWebgpuRenderer(canvas, width, height) {
         alphaMode: "opaque"
       });
       this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
+      this.createTrailTexture();
       this.clear();
     },
     clear() {
       const encoder = this.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: this.trailView,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear",
           storeOp: "store"
         }]
       });
       pass.end();
+      this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
     },
     fade(amount) {
@@ -616,7 +702,7 @@ export async function createWebgpuRenderer(canvas, width, height) {
       this.device.queue.writeBuffer(this.fadeBuffer, 0, new Float32Array([fadeAlpha]));
       const pass = this.getCommandEncoder().beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: this.trailView,
           loadOp: "load",
           storeOp: "store"
         }]
@@ -643,7 +729,7 @@ export async function createWebgpuRenderer(canvas, width, height) {
       this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices.buffer, vertices.byteOffset, byteLength);
       const pass = this.getCommandEncoder().beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: this.trailView,
           loadOp: "load",
           storeOp: "store"
         }]
@@ -653,7 +739,43 @@ export async function createWebgpuRenderer(canvas, width, height) {
       pass.setVertexBuffer(0, this.vertexBuffer);
       pass.draw(vertexFloatCount / FLOATS_PER_VERTEX);
       pass.end();
+      this.presentTrail(this.getCommandEncoder());
       this.submitCommandEncoder();
+    },
+    createTrailTexture() {
+      if (this.trailTexture !== null) {
+        this.trailTexture.destroy();
+      }
+      const trail = createWebgpuTrailTexture(this.device, this.format, this.width, this.height);
+      this.trailTexture = trail.texture;
+      this.trailView = trail.view;
+      this.presentBindGroup = this.device.createBindGroup({
+        layout: this.presentPipeline.getBindGroupLayout(0),
+        entries: [
+          {
+            binding: 0,
+            resource: this.presentSampler
+          },
+          {
+            binding: 1,
+            resource: this.trailView
+          }
+        ]
+      });
+    },
+    presentTrail(encoder) {
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.presentPipeline);
+      pass.setBindGroup(0, this.presentBindGroup);
+      pass.draw(6);
+      pass.end();
     },
     ensureVertexBuffer(byteLength) {
       if (this.vertexBuffer !== null && this.vertexBufferSize >= byteLength) {
@@ -1057,6 +1179,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     size: 4,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
+  const presenter = createWebgpuPresenter(device, format);
   const computeBindGroup = device.createBindGroup({
     layout: computePipeline.getBindGroupLayout(0),
     entries: [
@@ -1103,6 +1226,11 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     paramsBuffer,
     resolutionBuffer,
     fadeBuffer,
+    presentPipeline: presenter.pipeline,
+    presentSampler: presenter.sampler,
+    presentBindGroup: null,
+    trailTexture: null,
+    trailView: null,
     resize(nextWidth, nextHeight) {
       this.width = nextWidth;
       this.height = nextHeight;
@@ -1114,19 +1242,21 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
         alphaMode: "opaque"
       });
       this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
+      this.createTrailTexture();
       this.clear();
     },
     clear() {
       const encoder = this.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: this.trailView,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear",
           storeOp: "store"
         }]
       });
       pass.end();
+      this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
     },
     drawFrame(elapsedMs, fadeAmount) {
@@ -1154,7 +1284,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       if (fadeAmount !== null) {
         const fadePass = encoder.beginRenderPass({
           colorAttachments: [{
-            view: this.context.getCurrentTexture().createView(),
+            view: this.trailView,
             loadOp: "load",
             storeOp: "store"
           }]
@@ -1173,7 +1303,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
 
       const linePass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: this.trailView,
           loadOp: "load",
           storeOp: "store"
         }]
@@ -1183,7 +1313,43 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       linePass.setVertexBuffer(0, this.vertexBuffer);
       linePass.draw(lineVertexCount);
       linePass.end();
+      this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
+    },
+    createTrailTexture() {
+      if (this.trailTexture !== null) {
+        this.trailTexture.destroy();
+      }
+      const trail = createWebgpuTrailTexture(this.device, this.format, this.width, this.height);
+      this.trailTexture = trail.texture;
+      this.trailView = trail.view;
+      this.presentBindGroup = this.device.createBindGroup({
+        layout: this.presentPipeline.getBindGroupLayout(0),
+        entries: [
+          {
+            binding: 0,
+            resource: this.presentSampler
+          },
+          {
+            binding: 1,
+            resource: this.trailView
+          }
+        ]
+      });
+    },
+    presentTrail(encoder) {
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.context.getCurrentTexture().createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.presentPipeline);
+      pass.setBindGroup(0, this.presentBindGroup);
+      pass.draw(6);
+      pass.end();
     },
     finish() {
       return this.device.queue.onSubmittedWorkDone();

@@ -206,13 +206,13 @@
       <label class="control-field">
         <span>Renderer</span>
         <select id="rendererMode">
-          <option value="webgl">WebGL</option>
           <option value="cpu">CPU bitmap</option>
-          <option value="webgpu">WebGPU</option>
-          <option value="webgpu-compute">WebGPU compute</option>
+          <option value="webgl">GPU draw (WebGL)</option>
+          <option value="webgpu">GPU draw (WebGPU)</option>
+          <option value="webgpu-compute">GPU motion + draw</option>
         </select>
       </label>
     </div>
-    <script type="module" src="./swarm.js?v=44"></script>
+    <script type="module" src="./swarm.js?v=46"></script>
   </body>
 </html>
