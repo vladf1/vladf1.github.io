@@ -7,10 +7,11 @@ import {
   createLineVertexBuffer,
   createRandom,
   createSprites,
+  createWebgpuComputeRenderer,
   createWebgpuRenderer,
   createWebglRenderer,
   updateSprites
-} from "./swarm.js?v=41";
+} from "./swarm.js?v=43";
 
 const DEFAULT_FRAME_COUNT = 180;
 const DEFAULT_WIDTH = 800;
@@ -29,6 +30,7 @@ const results = document.querySelector("#results");
 const cpuCanvas = document.querySelector("#cpuCanvas");
 const webglCanvas = document.querySelector("#webglCanvas");
 const webgpuCanvas = document.querySelector("#webgpuCanvas");
+const webgpuComputeCanvas = document.querySelector("#webgpuComputeCanvas");
 
 spriteCountInput.value = String(readPositiveInteger(params.get("NumberOfSprites"), DEFAULT_SPRITE_COUNT));
 frameCountInput.value = String(readPositiveInteger(params.get("Frames"), DEFAULT_FRAME_COUNT));
@@ -65,7 +67,11 @@ async function runBenchmark() {
 
   const webgpuResult = await runRendererBenchmark("WebGPU lines", createWebgpuRenderer, webgpuCanvas, config);
   addResultRow(webgpuResult, cpuResult);
-  status.textContent = `Done. WebGL was ${formatSpeedup(cpuResult, webglResult)} and WebGPU was ${webgpuResult.supported ? formatSpeedup(cpuResult, webgpuResult) : "unavailable"} compared with the old CPU renderer.`;
+  await waitForPaint();
+
+  const webgpuComputeResult = await runWebgpuComputeBenchmark(config);
+  addResultRow(webgpuComputeResult, cpuResult);
+  status.textContent = `Done. WebGL was ${formatSpeedup(cpuResult, webglResult)}, WebGPU render-only was ${webgpuResult.supported ? formatSpeedup(cpuResult, webgpuResult) : "unavailable"}, and WebGPU compute was ${webgpuComputeResult.supported ? formatSpeedup(cpuResult, webgpuComputeResult) : "unavailable"} compared with the old CPU renderer.`;
   runButton.disabled = false;
 }
 
@@ -111,6 +117,35 @@ async function runRendererBenchmark(name, createRenderer, canvas, config) {
     await renderer.finish();
   }
   return createResult(name, performance.now() - started, config);
+}
+
+async function runWebgpuComputeBenchmark(config) {
+  const sprites = createBenchmarkSprites(config);
+  const motionState = createMotionState(config);
+  const renderer = await createWebgpuComputeRenderer(webgpuComputeCanvas, config.width, config.height, sprites, motionState);
+  if (renderer === null) {
+    return createSkippedResult("WebGPU compute+lines");
+  }
+
+  let fadeFramesElapsed = 0;
+  let fadeElapsedMs = 0;
+  const started = performance.now();
+
+  for (let frame = 0; frame < config.frameCount; frame++) {
+    fadeFramesElapsed++;
+    fadeElapsedMs += FIXED_ELAPSED_MS;
+    let fadeAmount = null;
+    if (fadeFramesElapsed === FADE_FRAME_INTERVAL) {
+      fadeAmount = 1 - config.fadeAmountPerMs * fadeElapsedMs;
+      fadeFramesElapsed = 0;
+      fadeElapsedMs = 0;
+    }
+
+    renderer.drawFrame(FIXED_ELAPSED_MS, fadeAmount);
+  }
+
+  await renderer.finish();
+  return createResult("WebGPU compute+lines", performance.now() - started, config);
 }
 
 function createBenchmarkSprites(config) {
