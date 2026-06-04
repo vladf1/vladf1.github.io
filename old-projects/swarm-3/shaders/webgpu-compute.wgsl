@@ -90,16 +90,21 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
         let distance = sqrt(distanceSquared);
         let minimumPullDistance = attractor.radius * 0.38;
         let outerFalloff = 1.0 - distance / attractor.radius;
-        let innerFalloff = smoothstep(0.0, minimumPullDistance, distance);
-        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * innerFalloff;
+        let innerDistance = clamp(distance / minimumPullDistance, 0.0, 1.0);
+        let innerFalloff = smoothstep(0.0, 1.0, innerDistance);
+        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * (0.04 + 0.96 * innerFalloff);
+        let inward = normalize(delta);
+        let randomAngle = randomUnit(index) * TWO_PI;
+        let randomDirection = vec2f(cos(randomAngle), sin(randomAngle));
+        let attractionDirection = normalize(inward * (0.08 + 0.92 * innerFalloff) + randomDirection * (1.0 - innerFalloff) * 1.4);
         if (pull > strongestPull) {
           secondPull = strongestPull;
           secondAttraction = attraction;
           strongestPull = pull;
-          attraction = normalize(delta) * pull * attractor.strength;
+          attraction = attractionDirection * pull * attractor.strength;
         } else if (pull > secondPull) {
           secondPull = pull;
-          secondAttraction = normalize(delta) * pull * attractor.strength;
+          secondAttraction = attractionDirection * pull * attractor.strength;
         }
       }
     }
