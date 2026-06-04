@@ -1,8 +1,9 @@
 const TWO_PI = 6.283185307179586;
 const WORKGROUP_SIZE = 256u;
+const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
 
 struct SimParams {
-  canvasAttractors: vec4f,
+  canvasWormsApples: vec4f,
   elapsedDistances: vec4f,
   turn: vec4f,
   reserved: vec4f,
@@ -13,7 +14,7 @@ struct LineVertex {
   color: vec4f,
 };
 
-struct Attractor {
+struct Apple {
   position: vec2f,
   strength: f32,
   radius: f32,
@@ -23,11 +24,11 @@ struct Attractor {
 @group(0) @binding(1) var<storage, read_write> motionA: array<vec4f>;
 @group(0) @binding(2) var<storage, read_write> motionB: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> motionC: array<vec4f>;
-@group(0) @binding(4) var<storage, read> colors: array<vec4f>;
-@group(0) @binding(5) var<storage, read_write> randomStates: array<u32>;
-@group(0) @binding(6) var<storage, read_write> vertices: array<LineVertex>;
-@group(0) @binding(7) var<uniform> params: SimParams;
-@group(0) @binding(8) var<storage, read> attractors: array<Attractor>;
+@group(0) @binding(4) var<storage, read_write> randomStates: array<u32>;
+@group(0) @binding(5) var<storage, read_write> vertices: array<LineVertex>;
+@group(0) @binding(6) var<uniform> params: SimParams;
+@group(0) @binding(7) var<storage, read> apples: array<Apple>;
+@group(0) @binding(8) var<storage, read_write> appleEaters: array<atomic<u32>>;
 
 fn randomUnit(index: u32) -> f32 {
   let next = randomStates[index] * 1664525u + 1013904223u;
@@ -37,6 +38,20 @@ fn randomUnit(index: u32) -> f32 {
 
 fn randomBetween(index: u32, minimum: f32, maximum: f32) -> f32 {
   return minimum + (maximum - minimum) * randomUnit(index);
+}
+
+fn colorUnit(seed: u32) -> f32 {
+  return f32(seed & 255u) / 255.0;
+}
+
+fn wormColor(index: u32) -> vec4f {
+  let hashed = index * 747796405u + 2891336453u;
+  return vec4f(
+    0.28 + 0.72 * colorUnit(hashed),
+    0.28 + 0.72 * colorUnit(hashed >> 8u),
+    0.28 + 0.72 * colorUnit(hashed >> 16u),
+    0.86
+  );
 }
 
 fn angleDifference(targetAngle: f32, currentAngle: f32) -> f32 {
@@ -53,16 +68,16 @@ fn angleDifference(targetAngle: f32, currentAngle: f32) -> f32 {
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let index = id.x;
-  let spriteCount = u32(params.canvasAttractors.z);
-  if (index >= spriteCount) {
+  let wormCount = u32(params.canvasWormsApples.z);
+  if (index >= wormCount) {
     return;
   }
 
-  let width = params.canvasAttractors.x;
-  let height = params.canvasAttractors.y;
-  let attractorCount = u32(params.canvasAttractors.w);
+  let width = params.canvasWormsApples.x;
+  let height = params.canvasWormsApples.y;
+  let appleCount = u32(params.canvasWormsApples.w);
   let elapsedMs = params.elapsedDistances.x;
-  let attractorTurnMs = params.turn.x;
+  let appleTurnMs = params.turn.x;
   let changeDirectionMs = params.turn.y;
   let maxRandomAngleChange = params.turn.z;
 
@@ -76,23 +91,33 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   var angleChangeMsLeft = motionC[index].y;
   let startPosition = position.xy;
 
-  if (attractorCount > 0u) {
+  if (appleCount > 0u) {
     var attraction = vec2f(0.0, 0.0);
     var strongestPull = 0.0;
     var secondAttraction = vec2f(0.0, 0.0);
     var secondPull = 0.0;
-    for (var attractorIndex = 0u; attractorIndex < attractorCount; attractorIndex++) {
-      let attractor = attractors[attractorIndex];
-      let delta = attractor.position - position.xy + offset;
+    for (var appleIndex = 0u; appleIndex < appleCount; appleIndex++) {
+      let apple = apples[appleIndex];
+      if (apple.radius <= 0.0 || apple.strength <= 0.0) {
+        continue;
+      }
+
+      let appleDelta = apple.position - position.xy;
+      if (dot(appleDelta, appleDelta) <= apple.radius * apple.radius) {
+        atomicAdd(&appleEaters[appleIndex], 1u);
+      }
+
+      let gravityRadius = max(apple.radius * APPLE_GRAVITY_RADIUS_SCALE, apple.radius + 1.0);
+      let delta = apple.position - position.xy + offset * apple.strength;
       let distanceSquared = max(dot(delta, delta), 16.0);
-      let radiusSquared = attractor.radius * attractor.radius;
+      let radiusSquared = gravityRadius * gravityRadius;
       if (distanceSquared < radiusSquared) {
         let distance = sqrt(distanceSquared);
-        let minimumPullDistance = attractor.radius * 0.38;
-        let outerFalloff = 1.0 - distance / attractor.radius;
+        let minimumPullDistance = max(apple.radius, gravityRadius * 0.18);
+        let outerFalloff = 1.0 - distance / gravityRadius;
         let innerDistance = clamp(distance / minimumPullDistance, 0.0, 1.0);
         let innerFalloff = smoothstep(0.0, 1.0, innerDistance);
-        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * (0.04 + 0.96 * innerFalloff);
+        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * (0.04 + 0.96 * innerFalloff) * apple.strength;
         let inward = normalize(delta);
         let randomAngle = randomUnit(index) * TWO_PI;
         let randomDirection = vec2f(cos(randomAngle), sin(randomAngle));
@@ -101,10 +126,10 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
           secondPull = strongestPull;
           secondAttraction = attraction;
           strongestPull = pull;
-          attraction = attractionDirection * pull * attractor.strength;
+          attraction = attractionDirection * pull;
         } else if (pull > secondPull) {
           secondPull = pull;
-          secondAttraction = attractionDirection * pull * attractor.strength;
+          secondAttraction = attractionDirection * pull;
         }
       }
     }
@@ -115,7 +140,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     }
 
     if (dot(attraction, attraction) > 0.0001) {
-      angleChangeMsLeft = attractorTurnMs;
+      angleChangeMsLeft = appleTurnMs;
       let newAngle = atan2(attraction.y, attraction.x);
       angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
     }
@@ -169,7 +194,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
   let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let color = colors[index];
+  let color = wormColor(index);
   vertices[index * 2u] = LineVertex(clampedStart, color);
   vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 

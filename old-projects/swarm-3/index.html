@@ -77,6 +77,31 @@
         transform: translateY(48px);
       }
 
+      #notice {
+        position: fixed;
+        left: 50%;
+        top: 86px;
+        z-index: 4;
+        padding: 8px 12px;
+        color: #f4ff28;
+        background: rgb(0 0 0 / 72%);
+        border: 1px solid rgb(244 255 40 / 38%);
+        border-radius: 7px;
+        font: 700 14px/1.2 Arial, Helvetica, sans-serif;
+        opacity: 0;
+        pointer-events: none;
+        text-shadow: 0 1px 2px black;
+        transform: translate(-50%, -8px);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      #notice.is-visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
       #controls {
         position: fixed;
         left: 50%;
@@ -197,13 +222,14 @@
   <body>
     <canvas id="swarm" aria-label="Pretty Swarm canvas"></canvas>
     <div id="stats"></div>
-    <div id="hint">Tap or click to drop attractors.</div>
+    <div id="hint">Worms love apples. Tap to plant one.</div>
+    <div id="notice" role="status" aria-live="polite"></div>
     <div id="controls">
       <button id="pauseButton" class="control-button" type="button" aria-pressed="false">Pause</button>
-      <button id="clearAttractorsButton" class="control-button secondary" type="button">Clear</button>
+      <button id="resetApplesButton" class="control-button secondary" type="button">Reset Apples</button>
       <label class="control-field">
-        <span>Sprites</span>
-        <input id="spriteCount" type="number" min="10" max="300000" step="1000" />
+        <span>Worms</span>
+        <input id="wormCount" type="number" min="10" max="300000" step="1000" />
       </label>
     </div>
     <script type="module" src="./swarm.js"></script>

@@ -1,29 +1,28 @@
 import {
   DEFAULT_FADE_AMOUNT,
-  DEFAULT_SPRITE_COUNT,
-  FADE_AMOUNT_PER_MS_SCALE,
-  createSprites
+  FADE_AMOUNT_PER_MS_SCALE
 } from "./swarm-common.js";
-import { MAX_ATTRACTORS, createWebgpuComputeRenderer } from "./swarm-webgpu.js";
+import { Apple, MAX_APPLES, clampApplesToViewport, updateApples } from "./swarm-apples.js";
+import { DEFAULT_WORM_COUNT, createWorms } from "./swarm-worms.js";
+import { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
 
 export * from "./swarm-common.js";
-export { MAX_ATTRACTORS, createWebgpuComputeRenderer } from "./swarm-webgpu.js";
-
-export function readSpriteCount(value) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SPRITE_COUNT;
-}
+export * from "./swarm-apples.js";
+export * from "./swarm-worms.js";
+export { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
 
 export async function startSwarmApp() {
   let canvas = document.querySelector("#swarm");
   const stats = document.querySelector("#stats");
   const pauseButton = document.querySelector("#pauseButton");
-  const clearAttractorsButton = document.querySelector("#clearAttractorsButton");
-  const spriteCountInput = document.querySelector("#spriteCount");
+  const resetApplesButton = document.querySelector("#resetApplesButton");
+  const wormCountInput = document.querySelector("#wormCount");
+  const notice = document.querySelector("#notice");
   let hint = document.querySelector("#hint");
 
   const params = new URLSearchParams(location.search);
-  let spriteCount = readSpriteCount(params.get("NumberOfSprites"));
+  const initialWormCount = Number.parseInt(params.get("NumberOfSprites"), 10);
+  let wormCount = Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : DEFAULT_WORM_COUNT;
   const fadeAmountPerMs = DEFAULT_FADE_AMOUNT * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
@@ -31,16 +30,16 @@ export async function startSwarmApp() {
   let rendererReady = false;
   let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
-  let canvasEventsAbortController = null;
-  let sprites = [];
-  let attractors = [];
+  let worms = [];
+  let apples = [];
   let lastAnimated = 0;
   let lastTimed = performance.now();
   let framesRendered = 0;
   let fps = null;
   let paused = false;
   let pendingAnimationFrameId = 0;
-  let lastAttractorDropMs = 0;
+  let lastApplePlantMs = 0;
+  let noticeTimeoutId = 0;
   const motionState = {
     width: canvasWidth,
     height: canvasHeight
@@ -53,8 +52,11 @@ export async function startSwarmApp() {
     motionState.width = canvasWidth;
     motionState.height = canvasHeight;
 
-    if (sprites.length === 0) {
-      recreateSprites();
+    if (worms.length === 0) {
+      recreateWorms();
+    }
+    if (apples.length > 0) {
+      clampApplesToViewport(apples, canvasWidth, canvasHeight);
     }
     resetDrawingSurface();
   }
@@ -80,9 +82,11 @@ export async function startSwarmApp() {
     }
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
-    renderer.drawFrame(sprites, motionState, elapsedMs, frameFadeAmount);
+    renderer.setApples(apples);
+    renderer.drawFrame(worms, motionState, elapsedMs, frameFadeAmount);
 
-    stats.textContent = `FPS: ${fps ?? "--"}\nSize: ${canvasWidth} x ${canvasHeight}\nItems: ${attractors.length}`;
+    const appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
+    stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}`;
     framesRendered++;
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
   }
@@ -90,7 +94,7 @@ export async function startSwarmApp() {
   function syncControls() {
     pauseButton.textContent = paused ? "Resume" : "Pause";
     pauseButton.setAttribute("aria-pressed", String(paused));
-    spriteCountInput.value = String(spriteCount);
+    wormCountInput.value = String(wormCount);
   }
 
   function setPaused(value) {
@@ -109,21 +113,22 @@ export async function startSwarmApp() {
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
   }
 
-  function setSpriteCount(value) {
-    const nextSpriteCount = readSpriteCount(value);
-    if (nextSpriteCount === spriteCount) {
-      spriteCountInput.value = String(spriteCount);
+  function setWormCount(value) {
+    const parsed = Number.parseInt(value, 10);
+    const nextWormCount = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WORM_COUNT;
+    if (nextWormCount === wormCount) {
+      wormCountInput.value = String(wormCount);
       return;
     }
-    spriteCount = nextSpriteCount;
-    spriteCountInput.value = String(spriteCount);
-    recreateSprites();
+    wormCount = nextWormCount;
+    wormCountInput.value = String(wormCount);
+    recreateWorms();
     resetDrawingSurface();
     writeConfigToUrl();
   }
 
-  function recreateSprites() {
-    sprites = createSprites(spriteCount, canvasWidth, canvasHeight, Math.random);
+  function recreateWorms() {
+    worms = createWorms(wormCount, canvasWidth, canvasHeight, Math.random);
   }
 
   async function resetDrawingSurface() {
@@ -133,11 +138,12 @@ export async function startSwarmApp() {
     rendererStatus = "Loading WebGPU...";
     renderer = null;
     try {
-      renderer = await withTimeout(
-        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, sprites, motionState),
-        4000,
-        "WebGPU initialization timed out"
-      );
+      renderer = await Promise.race([
+        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, worms, motionState),
+        new Promise((resolve, reject) => {
+          setTimeout(() => reject(new Error("WebGPU initialization timed out")), 4000);
+        })
+      ]);
     } catch (error) {
       if (generation === rendererGeneration) {
         rendererStatus = error instanceof Error ? error.message : "WebGPU unavailable";
@@ -148,10 +154,13 @@ export async function startSwarmApp() {
       return;
     }
     if (renderer === null) {
-      rendererStatus = getWebgpuUnavailableMessage();
+      rendererStatus = "gpu" in navigator ? "WebGPU unavailable." : "WebGPU unavailable in this browser.";
       return;
     }
-    renderer.setAttractors(attractors);
+    renderer.setAppleEatersHandler((eaterCounts, elapsedMs) => {
+      updateApples(apples, eaterCounts, elapsedMs);
+    });
+    renderer.setApples(apples);
     lastAnimated = 0;
     lastTimed = performance.now();
     framesRendered = 0;
@@ -161,43 +170,50 @@ export async function startSwarmApp() {
 
   function writeConfigToUrl() {
     const query = new URLSearchParams();
-    query.set("NumberOfSprites", String(spriteCount));
+    query.set("NumberOfSprites", String(wormCount));
     history.replaceState(null, "", `${location.pathname}?${query}`);
   }
 
-  function dropAttractor(event) {
+  function plantApple(event) {
     if (isControlElement(event.target)) {
       return;
     }
     event.preventDefault();
     const now = performance.now();
-    if (now - lastAttractorDropMs < 350) {
+    if (now - lastApplePlantMs < 350) {
       return;
     }
-    lastAttractorDropMs = now;
+    lastApplePlantMs = now;
 
     const rect = canvas.getBoundingClientRect();
-    const point = getEventPoint(event);
+    const point = event.touches?.[0] ?? event.changedTouches?.[0] ?? event;
     const x = (point.clientX - rect.left) * canvasWidth / rect.width;
     const y = (point.clientY - rect.top) * canvasHeight / rect.height;
-    attractors.push({ x, y });
-    if (attractors.length > MAX_ATTRACTORS) {
-      attractors = attractors.slice(-MAX_ATTRACTORS);
+    if (apples.length >= MAX_APPLES) {
+      showNotice(`Max apples reached (${MAX_APPLES})`);
+      return;
     }
-    renderer?.setAttractors(attractors);
-    fadeHint();
-  }
 
-  function clearAttractors(event) {
-    event?.preventDefault();
-    event?.stopPropagation();
-    attractors = [];
-    renderer?.setAttractors(attractors);
-  }
-
-  function fadeHint() {
+    apples.push(new Apple(Math.random, x, y));
+    renderer?.setApples(apples);
     hint?.classList.add("is-fading");
     hint = null;
+  }
+
+  function resetApples(event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    apples = [];
+    renderer?.setApples(apples);
+  }
+
+  function showNotice(message) {
+    clearTimeout(noticeTimeoutId);
+    notice.textContent = message;
+    notice.classList.add("is-visible");
+    noticeTimeoutId = setTimeout(() => {
+      notice.classList.remove("is-visible");
+    }, 1400);
   }
 
   function handleKeyDown(event) {
@@ -218,44 +234,18 @@ export async function startSwarmApp() {
     });
   }
   addEventListener("keydown", handleKeyDown);
-  bindCanvasEvents();
+  canvas.addEventListener("pointerdown", plantApple);
+  canvas.addEventListener("touchstart", plantApple, { passive: false });
+  canvas.addEventListener("mousedown", plantApple);
   pauseButton.addEventListener("click", () => setPaused(!paused));
-  clearAttractorsButton.addEventListener("click", clearAttractors);
-  spriteCountInput.addEventListener("input", () => setSpriteCount(spriteCountInput.value));
-  spriteCountInput.addEventListener("change", () => setSpriteCount(spriteCountInput.value));
+  resetApplesButton.addEventListener("click", resetApples);
+  wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
+  wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
 
   syncControls();
   writeConfigToUrl();
   resize();
   startAnimation();
-
-  function bindCanvasEvents() {
-    canvasEventsAbortController?.abort();
-    canvasEventsAbortController = new AbortController();
-    canvas.addEventListener("pointerdown", dropAttractor, { signal: canvasEventsAbortController.signal });
-    canvas.addEventListener("touchstart", dropAttractor, { passive: false, signal: canvasEventsAbortController.signal });
-    canvas.addEventListener("mousedown", dropAttractor, { signal: canvasEventsAbortController.signal });
-  }
-}
-
-function getEventPoint(event) {
-  return event.touches?.[0] ?? event.changedTouches?.[0] ?? event;
-}
-
-function getWebgpuUnavailableMessage() {
-  if (!("gpu" in navigator)) {
-    return "WebGPU unavailable in this browser.";
-  }
-  return "WebGPU unavailable.";
-}
-
-function withTimeout(promise, timeoutMs, message) {
-  return Promise.race([
-    promise,
-    new Promise((resolve, reject) => {
-      setTimeout(() => reject(new Error(message)), timeoutMs);
-    })
-  ]);
 }
 
 function isControlElement(target) {
