@@ -1,15 +1,12 @@
-import { randomBetween } from "./swarm-common.js";
-
 export const MAX_APPLES = 128;
-export const APPLE_MIN_RADIUS = 24;
 export const APPLE_MAX_RADIUS = 62;
-export const APPLE_MIN_ACTIVE_RADIUS = 10;
+export const APPLE_MIN_ACTIVE_RADIUS = 15;
 export const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
 export const APPLE_BITE_PERCENT_PER_SECOND = 0.00016;
 
 export class Apple {
-  constructor(random, x, y) {
-    this.fullRadius = randomBetween(random, APPLE_MIN_RADIUS, APPLE_MAX_RADIUS);
+  constructor(x, y) {
+    this.fullRadius = APPLE_MAX_RADIUS;
     this.reset(x, y);
   }
 
@@ -44,12 +41,12 @@ export function clampApplesToViewport(apples, width, height) {
   }
 }
 
-export function updateApples(apples, eaterCounts, elapsedMs) {
+export function updateApples(apples, eaterCounts, elapsedMs, bitePercentPerSecond) {
   for (let i = apples.length - 1; i >= 0; i--) {
     const apple = apples[i];
     const eaterCount = eaterCounts[i] ?? 0;
     if (eaterCount > 0) {
-      apple.volume = Math.max(0, apple.volume - APPLE_BITE_PERCENT_PER_SECOND * elapsedMs / 1000 * eaterCount);
+      apple.volume = Math.max(0, apple.volume - bitePercentPerSecond * elapsedMs / 1000 * eaterCount);
       if (apple.volume <= 0) {
         apples.splice(i, 1);
       }

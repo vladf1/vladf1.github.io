@@ -2,7 +2,13 @@ import {
   DEFAULT_FADE_AMOUNT,
   FADE_AMOUNT_PER_MS_SCALE
 } from "./swarm-common.js";
-import { Apple, MAX_APPLES, clampApplesToViewport, updateApples } from "./swarm-apples.js";
+import {
+  APPLE_BITE_PERCENT_PER_SECOND,
+  Apple,
+  MAX_APPLES,
+  clampApplesToViewport,
+  updateApples
+} from "./swarm-apples.js";
 import { DEFAULT_WORM_COUNT, createWorms } from "./swarm-worms.js";
 import { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
 
@@ -23,6 +29,7 @@ export async function startSwarmApp() {
   const params = new URLSearchParams(location.search);
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites"), 10);
   let wormCount = Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : DEFAULT_WORM_COUNT;
+  let appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
   const fadeAmountPerMs = DEFAULT_FADE_AMOUNT * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
@@ -121,6 +128,7 @@ export async function startSwarmApp() {
       return;
     }
     wormCount = nextWormCount;
+    appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
     wormCountInput.value = String(wormCount);
     recreateWorms();
     resetDrawingSurface();
@@ -158,7 +166,7 @@ export async function startSwarmApp() {
       return;
     }
     renderer.setAppleEatersHandler((eaterCounts, elapsedMs) => {
-      updateApples(apples, eaterCounts, elapsedMs);
+      updateApples(apples, eaterCounts, elapsedMs, appleBitePercentPerSecond);
     });
     renderer.setApples(apples);
     lastAnimated = 0;
@@ -194,7 +202,7 @@ export async function startSwarmApp() {
       return;
     }
 
-    apples.push(new Apple(Math.random, x, y));
+    apples.push(new Apple(x, y));
     renderer?.setApples(apples);
     hint?.classList.add("is-fading");
     hint = null;
