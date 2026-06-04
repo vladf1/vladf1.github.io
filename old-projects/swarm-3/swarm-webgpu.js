@@ -369,12 +369,10 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       linePass.setBindGroup(0, this.lineBindGroup);
       linePass.setVertexBuffer(0, this.vertexBuffer);
       linePass.draw(lineVertexCount);
-      if (this.attractorVertexCount > 0) {
-        linePass.setVertexBuffer(0, this.attractorVertexBuffer);
-        linePass.draw(this.attractorVertexCount);
-      }
       linePass.end();
-      this.presentTrail(encoder);
+      const targetView = this.context.getCurrentTexture().createView();
+      this.presentTrail(encoder, targetView);
+      this.drawAttractorOverlay(encoder, targetView);
       this.device.queue.submit([encoder.finish()]);
     },
     setAttractors(attractors) {
@@ -389,7 +387,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
         const y = attractor.y;
         this.attractorData.set([x, y, ATTRACTOR_STRENGTH, ATTRACTOR_RADIUS], index * FLOATS_PER_ATTRACTOR);
 
-        markerIndex = writeCircleVertices(this.attractorMarkerData, markerIndex, x, y, ATTRACTOR_RADIUS, 0.78, 0.92, 1, 0.24);
+        markerIndex = writeCircleVertices(this.attractorMarkerData, markerIndex, x, y, ATTRACTOR_RADIUS, 0.78, 0.92, 1, 0.5);
         markerIndex = writeCircleVertices(
           this.attractorMarkerData,
           markerIndex,
@@ -399,7 +397,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
           1,
           0.94,
           0.1,
-          0.42
+          0.5
         );
         markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x - ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1, 1);
         markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x + ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1, 1);
@@ -432,10 +430,10 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
         ]
       });
     },
-    presentTrail(encoder) {
+    presentTrail(encoder, targetView = this.context.getCurrentTexture().createView()) {
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: targetView,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear",
           storeOp: "store"
@@ -444,6 +442,24 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       pass.setPipeline(this.presentPipeline);
       pass.setBindGroup(0, this.presentBindGroup);
       pass.draw(6);
+      pass.end();
+    },
+    drawAttractorOverlay(encoder, targetView) {
+      if (this.attractorVertexCount === 0) {
+        return;
+      }
+
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: targetView,
+          loadOp: "load",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.linePipeline);
+      pass.setBindGroup(0, this.lineBindGroup);
+      pass.setVertexBuffer(0, this.attractorVertexBuffer);
+      pass.draw(this.attractorVertexCount);
       pass.end();
     },
     finish() {
