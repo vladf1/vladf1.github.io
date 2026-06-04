@@ -11,7 +11,7 @@ export class Sprite {
   static attractorTurnMs = 83.33333333333333;
   static changeDirectionMs = 166.66666666666666;
   static maxRandomAngleChange = 1.5;
-  static maxCrazinessPerMs = 0.006;
+  static maxCrazinessPerMs = 0.018;
 
   constructor(random, startX, startY) {
     this.random = random;

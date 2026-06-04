@@ -8,6 +8,7 @@
     "dev:swarm": "vite swarm-silverlight-port --host 127.0.0.1 --config vite.config.ts",
     "dev:swarm-2": "vite swarm-2 --host 127.0.0.1 --config vite.config.ts",
     "dev:swarm-3": "vite swarm-3 --host 127.0.0.1 --config vite.config.ts",
+    "dev:swarm-3:https": "vite swarm-3 --host 0.0.0.0 --config vite.https.config.ts",
     "dev:vector-defence": "vite vector-defence-silverlight-port --host 127.0.0.1 --config vite.config.ts",
     "build": "tsc -p tsconfig.json && npm run build:ports",
     "build:ports": "npm run build:fireworks && npm run build:swarm && npm run build:vector-defence",

@@ -18,6 +18,7 @@ export async function startSwarmApp() {
   let canvas = document.querySelector("#swarm");
   const stats = document.querySelector("#stats");
   const pauseButton = document.querySelector("#pauseButton");
+  const clearAttractorsButton = document.querySelector("#clearAttractorsButton");
   const spriteCountInput = document.querySelector("#spriteCount");
   let hint = document.querySelector("#hint");
 
@@ -28,6 +29,7 @@ export async function startSwarmApp() {
   let canvasHeight = 0;
   let renderer = null;
   let rendererReady = false;
+  let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
   let canvasEventsAbortController = null;
   let sprites = [];
@@ -38,12 +40,13 @@ export async function startSwarmApp() {
   let fps = null;
   let paused = false;
   let pendingAnimationFrameId = 0;
+  let lastAttractorDropMs = 0;
   const motionState = {
     width: canvasWidth,
     height: canvasHeight
   };
 
-  async function resize() {
+  function resize() {
     const rect = canvas.getBoundingClientRect();
     canvasWidth = Math.max(1, Math.floor(rect.width));
     canvasHeight = Math.max(1, Math.floor(rect.height));
@@ -53,7 +56,7 @@ export async function startSwarmApp() {
     if (sprites.length === 0) {
       recreateSprites();
     }
-    await resetDrawingSurface();
+    resetDrawingSurface();
   }
 
   function renderFrame(now) {
@@ -62,7 +65,7 @@ export async function startSwarmApp() {
       return;
     }
     if (!rendererReady || renderer === null) {
-      stats.textContent = "Loading WebGPU...";
+      stats.textContent = rendererStatus;
       pendingAnimationFrameId = requestAnimationFrame(renderFrame);
       return;
     }
@@ -127,12 +130,25 @@ export async function startSwarmApp() {
     const generation = rendererGeneration + 1;
     rendererGeneration = generation;
     rendererReady = false;
-    renderer = await createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, sprites, motionState);
+    rendererStatus = "Loading WebGPU...";
+    renderer = null;
+    try {
+      renderer = await withTimeout(
+        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, sprites, motionState),
+        4000,
+        "WebGPU initialization timed out"
+      );
+    } catch (error) {
+      if (generation === rendererGeneration) {
+        rendererStatus = error instanceof Error ? error.message : "WebGPU unavailable";
+      }
+      return;
+    }
     if (generation !== rendererGeneration) {
       return;
     }
     if (renderer === null) {
-      stats.textContent = "WebGPU unavailable";
+      rendererStatus = getWebgpuUnavailableMessage();
       return;
     }
     renderer.setAttractors(attractors);
@@ -150,15 +166,33 @@ export async function startSwarmApp() {
   }
 
   function dropAttractor(event) {
+    if (isControlElement(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    const now = performance.now();
+    if (now - lastAttractorDropMs < 350) {
+      return;
+    }
+    lastAttractorDropMs = now;
+
     const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * canvasWidth / rect.width;
-    const y = (event.clientY - rect.top) * canvasHeight / rect.height;
+    const point = getEventPoint(event);
+    const x = (point.clientX - rect.left) * canvasWidth / rect.width;
+    const y = (point.clientY - rect.top) * canvasHeight / rect.height;
     attractors.push({ x, y });
     if (attractors.length > MAX_ATTRACTORS) {
       attractors = attractors.slice(-MAX_ATTRACTORS);
     }
     renderer?.setAttractors(attractors);
     fadeHint();
+  }
+
+  function clearAttractors(event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    attractors = [];
+    renderer?.setAttractors(attractors);
   }
 
   function fadeHint() {
@@ -186,19 +220,42 @@ export async function startSwarmApp() {
   addEventListener("keydown", handleKeyDown);
   bindCanvasEvents();
   pauseButton.addEventListener("click", () => setPaused(!paused));
+  clearAttractorsButton.addEventListener("click", clearAttractors);
   spriteCountInput.addEventListener("input", () => setSpriteCount(spriteCountInput.value));
   spriteCountInput.addEventListener("change", () => setSpriteCount(spriteCountInput.value));
 
   syncControls();
   writeConfigToUrl();
-  await resize();
+  resize();
   startAnimation();
 
   function bindCanvasEvents() {
     canvasEventsAbortController?.abort();
     canvasEventsAbortController = new AbortController();
     canvas.addEventListener("pointerdown", dropAttractor, { signal: canvasEventsAbortController.signal });
+    canvas.addEventListener("touchstart", dropAttractor, { passive: false, signal: canvasEventsAbortController.signal });
+    canvas.addEventListener("mousedown", dropAttractor, { signal: canvasEventsAbortController.signal });
   }
+}
+
+function getEventPoint(event) {
+  return event.touches?.[0] ?? event.changedTouches?.[0] ?? event;
+}
+
+function getWebgpuUnavailableMessage() {
+  if (!("gpu" in navigator)) {
+    return "WebGPU unavailable in this browser.";
+  }
+  return "WebGPU unavailable.";
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  return Promise.race([
+    promise,
+    new Promise((resolve, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    })
+  ]);
 }
 
 function isControlElement(target) {
