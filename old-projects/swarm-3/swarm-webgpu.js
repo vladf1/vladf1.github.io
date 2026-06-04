@@ -3,9 +3,11 @@ import { Sprite, VERTICES_PER_LINE, loadShaders } from "./swarm-common.js";
 export const MAX_ATTRACTORS = 128;
 const FLOATS_PER_ATTRACTOR = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
-const VERTICES_PER_ATTRACTOR_MARKER = 4;
+const ATTRACTOR_RADIUS_SEGMENTS = 96;
+const VERTICES_PER_ATTRACTOR_MARKER = 4 + ATTRACTOR_RADIUS_SEGMENTS * 4;
 const ATTRACTOR_STRENGTH = 1;
-const ATTRACTOR_RADIUS = 560;
+const ATTRACTOR_RADIUS = 375;
+const ATTRACTOR_PLATEAU_RADIUS_SCALE = 0.38;
 const ATTRACTOR_MARKER_SIZE = 10;
 
 function createWebgpuPresenter(device, format, shaderSource) {
@@ -51,12 +53,12 @@ function createWebgpuTrailTexture(device, format, width, height) {
 
 export async function createWebgpuComputeRenderer(canvas, width, height, sprites, motionState) {
   if (!("gpu" in navigator)) {
-    return null;
+    throw new Error("WebGPU unavailable in this browser.");
   }
 
   const adapter = await navigator.gpu.requestAdapter();
   if (adapter === null) {
-    return null;
+    throw new Error("WebGPU adapter unavailable.");
   }
 
   const device = await adapter.requestDevice();
@@ -144,7 +146,21 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     fragment: {
       module: lineShader,
       entryPoint: "fragmentMain",
-      targets: [{ format }]
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: "src-alpha",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          },
+          alpha: {
+            srcFactor: "one",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          }
+        }
+      }]
     },
     primitive: {
       topology: "line-list"
@@ -373,10 +389,22 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
         const y = attractor.y;
         this.attractorData.set([x, y, ATTRACTOR_STRENGTH, ATTRACTOR_RADIUS], index * FLOATS_PER_ATTRACTOR);
 
-        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x - ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1);
-        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x + ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1);
-        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y - ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1);
-        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y + ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1);
+        markerIndex = writeCircleVertices(this.attractorMarkerData, markerIndex, x, y, ATTRACTOR_RADIUS, 0.78, 0.92, 1, 0.24);
+        markerIndex = writeCircleVertices(
+          this.attractorMarkerData,
+          markerIndex,
+          x,
+          y,
+          ATTRACTOR_RADIUS * ATTRACTOR_PLATEAU_RADIUS_SCALE,
+          1,
+          0.94,
+          0.1,
+          0.42
+        );
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x - ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1, 1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x + ATTRACTOR_MARKER_SIZE, y, 1, 0.94, 0.1, 1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y - ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1, 1);
+        markerIndex = writeMarkerVertex(this.attractorMarkerData, markerIndex, x, y + ATTRACTOR_MARKER_SIZE, 1, 0.94, 0.1, 1);
       }
 
       this.attractorVertexCount = markerIndex / FLOATS_PER_MARKER_VERTEX;
@@ -436,7 +464,35 @@ function createStorageBuffer(device, data) {
   return buffer;
 }
 
-function writeMarkerVertex(vertices, index, x, y, red, green, blue) {
+function writeCircleVertices(vertices, index, centerX, centerY, radius, red, green, blue, alpha) {
+  for (let segment = 0; segment < ATTRACTOR_RADIUS_SEGMENTS; segment++) {
+    const startAngle = segment / ATTRACTOR_RADIUS_SEGMENTS * Math.PI * 2;
+    const endAngle = (segment + 1) / ATTRACTOR_RADIUS_SEGMENTS * Math.PI * 2;
+    index = writeMarkerVertex(
+      vertices,
+      index,
+      centerX + Math.cos(startAngle) * radius,
+      centerY + Math.sin(startAngle) * radius,
+      red,
+      green,
+      blue,
+      alpha
+    );
+    index = writeMarkerVertex(
+      vertices,
+      index,
+      centerX + Math.cos(endAngle) * radius,
+      centerY + Math.sin(endAngle) * radius,
+      red,
+      green,
+      blue,
+      alpha
+    );
+  }
+  return index;
+}
+
+function writeMarkerVertex(vertices, index, x, y, red, green, blue, alpha) {
   vertices[index++] = x;
   vertices[index++] = y;
   vertices[index++] = 0;
@@ -444,7 +500,7 @@ function writeMarkerVertex(vertices, index, x, y, red, green, blue) {
   vertices[index++] = red;
   vertices[index++] = green;
   vertices[index++] = blue;
-  vertices[index++] = 1;
+  vertices[index++] = alpha;
   return index;
 }
 

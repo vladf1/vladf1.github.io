@@ -161,6 +161,17 @@
         background: #0d6efd;
       }
 
+      .control-button.secondary {
+        color: #eeeeee;
+        border-color: rgb(255 255 255 / 28%);
+        background: rgb(0 0 0 / 32%);
+      }
+
+      .control-button.secondary:hover {
+        border-color: rgb(244 255 40 / 55%);
+        background: rgb(244 255 40 / 12%);
+      }
+
       .control-button:focus-visible {
         outline: 2px solid #f4ff28;
         outline-offset: 2px;
@@ -186,9 +197,10 @@
   <body>
     <canvas id="swarm" aria-label="Pretty Swarm canvas"></canvas>
     <div id="stats"></div>
-    <div id="hint">Click to drop attractors.</div>
+    <div id="hint">Tap or click to drop attractors.</div>
     <div id="controls">
       <button id="pauseButton" class="control-button" type="button" aria-pressed="false">Pause</button>
+      <button id="clearAttractorsButton" class="control-button secondary" type="button">Clear</button>
       <label class="control-field">
         <span>Sprites</span>
         <input id="spriteCount" type="number" min="10" max="300000" step="1000" />

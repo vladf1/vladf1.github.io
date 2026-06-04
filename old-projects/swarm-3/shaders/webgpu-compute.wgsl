@@ -89,9 +89,9 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
       if (distanceSquared < radiusSquared) {
         let distance = sqrt(distanceSquared);
         let minimumPullDistance = attractor.radius * 0.38;
-        let effectiveDistance = max(distance, minimumPullDistance);
-        let falloff = 1.0 - effectiveDistance / attractor.radius;
-        let pull = falloff * falloff * falloff * falloff;
+        let outerFalloff = 1.0 - distance / attractor.radius;
+        let innerFalloff = smoothstep(0.0, minimumPullDistance, distance);
+        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * innerFalloff;
         if (pull > strongestPull) {
           secondPull = strongestPull;
           secondAttraction = attraction;
