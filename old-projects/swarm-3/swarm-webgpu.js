@@ -397,7 +397,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
 
         if (radius > 0) {
           markerIndex = writeCircleVertices(this.appleMarkerData, markerIndex, x, y, radius, 1, 0.12, 0.22, 0.88);
-          markerIndex = writeCircleVertices(this.appleMarkerData, markerIndex, x, y, radius * 0.82, 1, 0.86, 0.28, 0.45);
           markerIndex = writeMarkerVertex(this.appleMarkerData, markerIndex, x, y - radius * 0.92, 0.36, 0.18, 0.07, 0.95);
           markerIndex = writeMarkerVertex(this.appleMarkerData, markerIndex, x + APPLE_STEM_SIZE * 0.25, y - radius - APPLE_STEM_SIZE, 0.36, 0.18, 0.07, 0.95);
           markerIndex = writeMarkerVertex(this.appleMarkerData, markerIndex, x + APPLE_STEM_SIZE * 0.35, y - radius * 0.92, 0.42, 0.88, 0.27, 0.9);
