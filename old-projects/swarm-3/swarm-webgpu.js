@@ -1,4 +1,4 @@
-import { loadShaders, randomBetween } from "./swarm-common.js";
+import { loadShaders } from "./swarm-common.js";
 import { Worm } from "./swarm-worms.js";
 import {
   APPLE_MAX_RADIUS,
@@ -59,13 +59,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     throw new Error(`WebGPU limit reached. Try ${maxSupportedWormCount.toLocaleString()} worms or fewer.`);
   }
   const capacityWormCount = getWormCapacity(wormCount, maxSupportedWormCount);
-  const positionData = new Float32Array(capacityWormCount * 4);
-  const motionAData = new Float32Array(capacityWormCount * 4);
-  const motionBData = new Float32Array(capacityWormCount * 4);
-  const motionCData = new Float32Array(capacityWormCount * 4);
-  const randomData = new Uint32Array(capacityWormCount);
-  initializeWormData(positionData, motionAData, motionBData, motionCData, randomData, 0, wormCount, width, height);
-  const wormResources = createWormResourcesFromData(device, capacityWormCount, positionData, motionAData, motionBData, motionCData, randomData);
+  const wormResources = createWormResources(device, capacityWormCount);
   const appleData = new Float32Array(MAX_APPLES * FLOATS_PER_APPLE);
   const appleMarkerData = new Float32Array(MAX_APPLES * VERTICES_PER_APPLE_MARKER * FLOATS_PER_MARKER_VERTEX);
   const appleEaterClearData = new Uint32Array(MAX_APPLES);
@@ -94,6 +88,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     compute: {
       module: computeShader,
       entryPoint: "computeMain"
+    }
+  });
+  const initPipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: computeShader,
+      entryPoint: "initMain"
     }
   });
   const applePipeline = device.createComputePipeline({
@@ -223,6 +224,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   });
   const presenter = createWebgpuPresenter(device, format, presentShaderSource);
   const computeBindGroup = createComputeBindGroup(device, computePipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer);
+  const initBindGroup = createInitBindGroup(device, initPipeline, wormResources, paramsBuffer);
   const appleBindGroup = device.createBindGroup({
     layout: applePipeline.getBindGroupLayout(0),
     entries: [
@@ -272,11 +274,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     maxSupportedWormCount,
     wormResources,
     computePipeline,
+    initPipeline,
     applePipeline,
     applePlacementPipeline,
     linePipeline,
     fadePipeline,
     computeBindGroup,
+    initBindGroup,
     appleBindGroup,
     applePlacementBindGroup,
     lineBindGroup,
@@ -298,11 +302,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     appleFreeCountData,
     appleVertexBuffer,
     applePreviewBuffer,
-    positionData,
-    motionAData,
-    motionBData,
-    motionCData,
-    randomData,
     appleData,
     appleMarkerData,
     applePlacementData,
@@ -349,33 +348,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
         return true;
       }
 
-      initializeWormData(
-        this.positionData,
-        this.motionAData,
-        this.motionBData,
-        this.motionCData,
-        this.randomData,
-        previousWormCount,
-        nextWormCount,
-        this.width,
-        this.height
-      );
-      this.device.queue.writeBuffer(this.positionBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.positionData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionABuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionAData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionBBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionBData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionCBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionCData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.randomBuffer, previousWormCount * BYTES_PER_RANDOM_STATE, this.randomData.subarray(previousWormCount, nextWormCount));
+      this.initWormRange(previousWormCount, nextWormCount);
       return true;
     },
     growWormCapacity(nextWormCount) {
       const previousResources = this.wormResources;
       const nextCapacity = getWormCapacity(nextWormCount, this.maxSupportedWormCount);
       const nextResources = createWormResources(this.device, nextCapacity);
-      const nextPositionData = new Float32Array(nextCapacity * 4);
-      const nextMotionAData = new Float32Array(nextCapacity * 4);
-      const nextMotionBData = new Float32Array(nextCapacity * 4);
-      const nextMotionCData = new Float32Array(nextCapacity * 4);
-      const nextRandomData = new Uint32Array(nextCapacity);
       const encoder = this.device.createCommandEncoder();
       copyWormBufferRange(encoder, previousResources.positionBuffer, nextResources.positionBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
       copyWormBufferRange(encoder, previousResources.motionABuffer, nextResources.motionABuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
@@ -392,12 +371,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.motionCBuffer = nextResources.motionCBuffer;
       this.randomBuffer = nextResources.randomBuffer;
       this.vertexBuffer = nextResources.vertexBuffer;
-      this.positionData = nextPositionData;
-      this.motionAData = nextMotionAData;
-      this.motionBData = nextMotionBData;
-      this.motionCData = nextMotionCData;
-      this.randomData = nextRandomData;
       this.computeBindGroup = createComputeBindGroup(this.device, this.computePipeline, nextResources, this.paramsBuffer, this.appleBuffer, this.appleEaterBuffer);
+      this.initBindGroup = createInitBindGroup(this.device, this.initPipeline, nextResources, this.paramsBuffer);
 
       previousResources.positionBuffer.destroy();
       previousResources.motionABuffer.destroy();
@@ -405,6 +380,37 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       previousResources.motionCBuffer.destroy();
       previousResources.randomBuffer.destroy();
       previousResources.vertexBuffer.destroy();
+    },
+    initWormRange(startIndex, endIndex) {
+      if (startIndex >= endIndex) {
+        return;
+      }
+
+      this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
+        this.width,
+        this.height,
+        this.wormCount,
+        this.appleSlotCount,
+        0,
+        0,
+        APPLE_MIN_ACTIVE_RADIUS,
+        APPLE_MAX_RADIUS,
+        Worm.appleTurnMs,
+        Worm.changeDirectionMs,
+        Worm.maxRandomAngleChange,
+        0,
+        startIndex,
+        endIndex,
+        0,
+        0
+      ]));
+      const encoder = this.device.createCommandEncoder();
+      const initPass = encoder.beginComputePass();
+      initPass.setPipeline(this.initPipeline);
+      initPass.setBindGroup(0, this.initBindGroup);
+      initPass.dispatchWorkgroups(Math.ceil((endIndex - startIndex) / 256));
+      initPass.end();
+      this.device.queue.submit([encoder.finish()]);
     },
     clear() {
       const encoder = this.device.createCommandEncoder();
@@ -672,6 +678,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   };
 
   renderer.resize(width, height);
+  renderer.initWormRange(0, wormCount);
   return renderer;
 }
 
@@ -725,24 +732,24 @@ function createWormResources(device, capacityWormCount) {
   };
 }
 
-function createWormResourcesFromData(device, capacityWormCount, positionData, motionAData, motionBData, motionCData, randomData) {
-  return {
-    positionBuffer: createStorageBuffer(device, positionData),
-    motionABuffer: createStorageBuffer(device, motionAData),
-    motionBBuffer: createStorageBuffer(device, motionBData),
-    motionCBuffer: createStorageBuffer(device, motionCData),
-    randomBuffer: createStorageBuffer(device, randomData),
-    vertexBuffer: device.createBuffer({
-      size: capacityWormCount * VERTICES_PER_WORM * COMPUTE_VERTEX_STRIDE,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
-    })
-  };
-}
-
 function createEmptyStorageBuffer(device, size) {
   return device.createBuffer({
     size,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+}
+
+function createInitBindGroup(device, initPipeline, wormResources, paramsBuffer) {
+  return device.createBindGroup({
+    layout: initPipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: wormResources.positionBuffer } },
+      { binding: 1, resource: { buffer: wormResources.motionABuffer } },
+      { binding: 2, resource: { buffer: wormResources.motionBBuffer } },
+      { binding: 3, resource: { buffer: wormResources.motionCBuffer } },
+      { binding: 4, resource: { buffer: wormResources.randomBuffer } },
+      { binding: 6, resource: { buffer: paramsBuffer } }
+    ]
   });
 }
 
@@ -781,43 +788,6 @@ function getWormCapacity(wormCount, maxSupportedWormCount) {
     maxSupportedWormCount,
     Math.ceil(wormCount / WORM_CAPACITY_BUCKET_SIZE) * WORM_CAPACITY_BUCKET_SIZE
   );
-}
-
-function initializeWormData(positionData, motionAData, motionBData, motionCData, randomData, startIndex, endIndex, width, height) {
-  for (let index = startIndex; index < endIndex; index++) {
-    const startX = Math.floor(randomBetween(Math.random, 0, width));
-    const startY = Math.floor(randomBetween(Math.random, 0, height));
-    const speed = Worm.maxVelocityPerMs * randomBetween(Math.random, 0.4, 1);
-    const crazinessPerMs = randomBetween(Math.random, 0, Worm.maxCrazinessPerMs);
-    const offsetX = randomBetween(Math.random, -Worm.maxOffsetAmount, Worm.maxOffsetAmount);
-    const offsetY = randomBetween(Math.random, -Worm.maxOffsetAmount, Worm.maxOffsetAmount);
-    const angle = randomBetween(Math.random, 0, Math.PI * 2);
-    positionData.set([
-      startX,
-      startY,
-      startX,
-      startY
-    ], index * 4);
-    motionAData.set([
-      speed * Math.cos(angle),
-      speed * Math.sin(angle),
-      speed,
-      crazinessPerMs
-    ], index * 4);
-    motionBData.set([
-      offsetX,
-      offsetY,
-      0,
-      angle
-    ], index * 4);
-    motionCData.set([
-      0,
-      0,
-      0,
-      0
-    ], index * 4);
-    randomData[index] = (0x9e3779b9 ^ (index * 747796405) ^ endIndex) >>> 0;
-  }
 }
 
 function writeCircleVertices(vertices, index, centerX, centerY, radius, red, green, blue, alpha) {

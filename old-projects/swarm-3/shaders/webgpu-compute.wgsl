@@ -66,6 +66,34 @@ fn angleDifference(targetAngle: f32, currentAngle: f32) -> f32 {
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE)
+fn initMain(@builtin(global_invocation_id) id: vec3u) {
+  let initStart = u32(params.reserved.x);
+  let initEnd = u32(params.reserved.y);
+  let index = initStart + id.x;
+  if (index >= initEnd) {
+    return;
+  }
+
+  let width = params.canvasWormsApples.x;
+  let height = params.canvasWormsApples.y;
+  randomStates[index] = (0x9e3779b9u ^ (index * 747796405u) ^ initEnd) | 1u;
+
+  let startX = floor(randomBetween(index, 0.0, width));
+  let startY = floor(randomBetween(index, 0.0, height));
+  let speed = 0.36 * randomBetween(index, 0.4, 1.0);
+  let crazinessPerMs = randomBetween(index, 0.0, 0.018);
+  let offsetX = randomBetween(index, -10.0, 10.0);
+  let offsetY = randomBetween(index, -10.0, 10.0);
+  let angle = randomBetween(index, 0.0, TWO_PI);
+  let velocity = vec2f(speed * cos(angle), speed * sin(angle));
+
+  positions[index] = vec4f(startX, startY, startX, startY);
+  motionA[index] = vec4f(velocity, speed, crazinessPerMs);
+  motionB[index] = vec4f(offsetX, offsetY, 0.0, angle);
+  motionC[index] = vec4f(0.0, 0.0, 0.0, 0.0);
+}
+
+@compute @workgroup_size(WORKGROUP_SIZE)
 fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let index = id.x;
   let wormCount = u32(params.canvasWormsApples.z);
