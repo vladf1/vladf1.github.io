@@ -29,9 +29,9 @@ const FLOATS_PER_WORM_VEC4_BUFFER = 4;
 const BYTES_PER_WORM_VEC4_BUFFER = FLOATS_PER_WORM_VEC4_BUFFER * Float32Array.BYTES_PER_ELEMENT;
 const BYTES_PER_RANDOM_STATE = Uint32Array.BYTES_PER_ELEMENT;
 const COMPUTE_VERTEX_STRIDE = 32;
-let webgpuContextPromise = null;
+let webgpuContextPromise: Promise<{ adapter: GPUAdapter; device: GPUDevice }> | null = null;
 
-function createWebgpuPresenter(device, format, shaderSource) {
+function createWebgpuPresenter(device: GPUDevice, format: GPUTextureFormat, shaderSource: string) {
   const shader = device.createShaderModule({
     code: shaderSource
   });
@@ -60,9 +60,9 @@ function createWebgpuPresenter(device, format, shaderSource) {
   };
 }
 
-export async function createWebgpuComputeRenderer(canvas, width, height, wormCount) {
+export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, width: number, height: number, wormCount: number) {
   const { device } = await getWebgpuContext();
-  const context = canvas.getContext("webgpu");
+  const context = canvas.getContext("webgpu")!;
   const format = navigator.gpu.getPreferredCanvasFormat();
   const maxSupportedWormCount = getMaxSupportedWormCount(device, COMPUTE_VERTEX_STRIDE);
   if (wormCount > maxSupportedWormCount) {
@@ -249,7 +249,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       }
     ]
   });
-  const renderer = {
+  const renderer: any = {
     canvas,
     context,
     device,
@@ -309,7 +309,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     trailTexture: null,
     trailView: null,
 
-    resize(nextWidth, nextHeight) {
+    resize(nextWidth: number, nextHeight: number) {
       this.width = nextWidth;
       this.height = nextHeight;
       this.canvas.width = nextWidth;
@@ -324,7 +324,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.clear();
     },
 
-    setWormCount(nextWormCount) {
+    setWormCount(nextWormCount: number) {
       if (nextWormCount > this.maxSupportedWormCount) {
         throw new Error(`WebGPU limit reached. Try ${this.maxSupportedWormCount.toLocaleString()} worms or fewer.`);
       }
@@ -342,7 +342,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       return true;
     },
 
-    growWormCapacity(nextWormCount) {
+    growWormCapacity(nextWormCount: number) {
       const previousResources = this.wormResources;
       const nextCapacity = getWormCapacity(nextWormCount, this.maxSupportedWormCount);
       const nextResources = createWormResources(this.device, nextCapacity);
@@ -373,7 +373,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       previousResources.vertexBuffer.destroy();
     },
 
-    initWormRange(startIndex, endIndex) {
+    initWormRange(startIndex: number, endIndex: number) {
       if (startIndex >= endIndex) {
         return;
       }
@@ -420,7 +420,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.device.queue.submit([encoder.finish()]);
     },
 
-    drawFrame(elapsedMs, fadeAmount, appleBitePercentPerSecond) {
+    drawFrame(elapsedMs: number, fadeAmount: number | null, appleBitePercentPerSecond: number) {
       const applePlacementCount = this.applePlacementCount;
       if (applePlacementCount > 0) {
         this.device.queue.writeBuffer(
@@ -514,7 +514,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       }
     },
 
-    queueApplePlacement(x, y) {
+    queueApplePlacement(x: number, y: number) {
       if (this.applePlacementCount >= MAX_APPLE_PLACEMENTS_PER_FRAME) {
         return false;
       }
@@ -544,7 +544,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.device.queue.writeBuffer(this.appleVertexBuffer, 0, this.appleMarkerData);
     },
 
-    requestAppleSnapshot(handler) {
+    requestAppleSnapshot(handler: (snapshot: Float32Array) => void) {
       if (this.appleSnapshotPending) {
         return;
       }
@@ -576,10 +576,11 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       });
     },
 
-    presentTrail(encoder, targetView = this.context.getCurrentTexture().createView()) {
+    presentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
+      const view = targetView ?? this.context.getCurrentTexture().createView();
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: targetView,
+          view,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear",
           storeOp: "store"
@@ -591,7 +592,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       pass.end();
     },
 
-    drawAppleOverlay(encoder, targetView) {
+    drawAppleOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
           view: targetView,
@@ -606,13 +607,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       pass.end();
     },
 
-    setApplePreview(x, y, visible) {
+    setApplePreview(x: number, y: number, visible: boolean) {
       this.applePreviewVisible = visible;
       this.applePreviewData.set([x, y, visible ? 1 : 0, 0]);
       this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
     },
 
-    drawApplePreview(encoder, targetView) {
+    drawApplePreview(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
       if (!this.applePreviewVisible) {
         return;
       }
@@ -677,7 +678,7 @@ async function getWebgpuContext() {
   return webgpuContextPromise;
 }
 
-function createStorageBuffer(device, data) {
+function createStorageBuffer(device: GPUDevice, data: BufferSource) {
   const buffer = device.createBuffer({
     size: data.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
@@ -686,7 +687,13 @@ function createStorageBuffer(device, data) {
   return buffer;
 }
 
-function createLinePipeline(device, format, shader, vertexEntryPoint, buffers = []) {
+function createLinePipeline(
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  shader: GPUShaderModule,
+  vertexEntryPoint: string,
+  buffers: GPUVertexBufferLayout[] = []
+) {
   return device.createRenderPipeline({
     layout: "auto",
     vertex: {
@@ -719,7 +726,7 @@ function createLinePipeline(device, format, shader, vertexEntryPoint, buffers = 
   });
 }
 
-function createWormResources(device, capacityWormCount) {
+function createWormResources(device: GPUDevice, capacityWormCount: number) {
   return {
     positionBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
     motionABuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
@@ -733,14 +740,19 @@ function createWormResources(device, capacityWormCount) {
   };
 }
 
-function createEmptyStorageBuffer(device, size) {
+function createEmptyStorageBuffer(device: GPUDevice, size: number) {
   return device.createBuffer({
     size,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
   });
 }
 
-function createInitBindGroup(device, initializeWormStateRangePipeline, wormResources, paramsBuffer) {
+function createInitBindGroup(
+  device: GPUDevice,
+  initializeWormStateRangePipeline: GPUComputePipeline,
+  wormResources: ReturnType<typeof createWormResources>,
+  paramsBuffer: GPUBuffer
+) {
   return device.createBindGroup({
     layout: initializeWormStateRangePipeline.getBindGroupLayout(0),
     entries: [
@@ -754,7 +766,14 @@ function createInitBindGroup(device, initializeWormStateRangePipeline, wormResou
   });
 }
 
-function createComputeBindGroup(device, updateWormStateAndWriteLineVerticesPipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer) {
+function createComputeBindGroup(
+  device: GPUDevice,
+  updateWormStateAndWriteLineVerticesPipeline: GPUComputePipeline,
+  wormResources: ReturnType<typeof createWormResources>,
+  paramsBuffer: GPUBuffer,
+  appleBuffer: GPUBuffer,
+  appleEaterBuffer: GPUBuffer
+) {
   return device.createBindGroup({
     layout: updateWormStateAndWriteLineVerticesPipeline.getBindGroupLayout(0),
     entries: [
@@ -771,20 +790,20 @@ function createComputeBindGroup(device, updateWormStateAndWriteLineVerticesPipel
   });
 }
 
-function copyWormBufferRange(encoder, sourceBuffer, destinationBuffer, byteLength) {
+function copyWormBufferRange(encoder: GPUCommandEncoder, sourceBuffer: GPUBuffer, destinationBuffer: GPUBuffer, byteLength: number) {
   if (byteLength > 0) {
     encoder.copyBufferToBuffer(sourceBuffer, 0, destinationBuffer, 0, byteLength);
   }
 }
 
-function getMaxSupportedWormCount(gpuLimitsSource, computeVertexStride = 32) {
+function getMaxSupportedWormCount(gpuLimitsSource: { limits: GPUSupportedLimits }, computeVertexStride = 32) {
   const lineBytesPerWorm = VERTICES_PER_WORM * computeVertexStride;
   const storageLimit = gpuLimitsSource.limits.maxStorageBufferBindingSize;
   const bufferLimit = gpuLimitsSource.limits.maxBufferSize;
   return Math.max(1, Math.floor(Math.min(storageLimit, bufferLimit) / lineBytesPerWorm));
 }
 
-function getWormCapacity(wormCount, maxSupportedWormCount) {
+function getWormCapacity(wormCount: number, maxSupportedWormCount: number) {
   return Math.min(
     maxSupportedWormCount,
     Math.ceil(wormCount / WORM_CAPACITY_BUCKET_SIZE) * WORM_CAPACITY_BUCKET_SIZE

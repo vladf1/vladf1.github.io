@@ -11,12 +11,14 @@
     "dev:swarm-3:https": "vite swarm-3 --host 0.0.0.0 --config vite.https.config.ts",
     "dev:vector-defence": "vite vector-defence-silverlight-port --host 127.0.0.1 --config vite.config.ts",
     "build": "tsc -p tsconfig.json && npm run build:ports",
-    "build:ports": "npm run build:fireworks && npm run build:swarm && npm run build:vector-defence",
+    "build:ports": "npm run build:fireworks && npm run build:swarm && npm run build:swarm-3 && npm run build:vector-defence",
     "build:fireworks": "vite build fireworks-silverlight-port --config vite.config.ts",
     "build:swarm": "vite build swarm-silverlight-port --config vite.config.ts",
+    "build:swarm-3": "vite build swarm-3 --config vite.config.ts",
     "build:vector-defence": "vite build vector-defence-silverlight-port --config vite.config.ts"
   },
   "devDependencies": {
+    "@webgpu/types": "^0.1.70",
     "typescript": "^6.0.3",
     "vite": "^8.0.14"
   }
