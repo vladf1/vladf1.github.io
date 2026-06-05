@@ -96,6 +96,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     var strongestPull = 0.0;
     var secondAttraction = vec2f(0.0, 0.0);
     var secondPull = 0.0;
+    var eatenAppleIndex = appleCount;
+    var eatenAppleDistanceSquared = 1e30;
     for (var appleIndex = 0u; appleIndex < appleCount; appleIndex++) {
       let apple = apples[appleIndex];
       if (apple.radius <= 0.0 || apple.volume <= 0.0) {
@@ -104,8 +106,10 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
       let appleStrength = 0.1 + 0.9 * sqrt(apple.volume);
       let appleDelta = apple.position - position.xy;
-      if (dot(appleDelta, appleDelta) <= apple.radius * apple.radius) {
-        atomicAdd(&appleEaters[appleIndex], 1u);
+      let appleDistanceSquared = dot(appleDelta, appleDelta);
+      if (appleDistanceSquared <= apple.radius * apple.radius && appleDistanceSquared < eatenAppleDistanceSquared) {
+        eatenAppleIndex = appleIndex;
+        eatenAppleDistanceSquared = appleDistanceSquared;
       }
 
       let gravityRadius = max(apple.radius * APPLE_GRAVITY_RADIUS_SCALE, apple.radius + 1.0);
@@ -133,6 +137,10 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
           secondAttraction = attractionDirection * pull;
         }
       }
+    }
+
+    if (eatenAppleIndex < appleCount) {
+      atomicAdd(&appleEaters[eatenAppleIndex], 1u);
     }
 
     let weakerChance = 0.08 + 0.20 * clamp(secondPull / max(strongestPull, 0.0001), 0.0, 1.0);
