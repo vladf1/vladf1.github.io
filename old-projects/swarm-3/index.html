@@ -166,24 +166,31 @@
       .control-button {
         min-width: 70px;
         padding: 8px 12px;
-        color: #0d6efd;
-        border: 1px solid #0d6efd;
+        color: #dffbff;
+        border: 1px solid rgb(125 249 255 / 58%);
         border-radius: 7px;
-        background: rgb(255 255 255 / 96%);
+        background: rgb(10 42 52 / 90%);
         font: inherit;
         font-weight: 700;
         cursor: pointer;
       }
 
       .control-button:hover {
-        border-color: #0b5ed7;
-        background: rgb(13 110 253 / 12%);
+        color: white;
+        border-color: rgb(125 249 255 / 86%);
+        background: rgb(18 72 88 / 94%);
       }
 
       .control-button[aria-pressed="true"] {
-        color: white;
-        border-color: #0d6efd;
-        background: #0d6efd;
+        color: #1e1700;
+        border-color: rgb(244 255 40 / 92%);
+        background: rgb(244 255 40 / 92%);
+      }
+
+      .control-button[aria-pressed="true"]:hover {
+        color: #120f00;
+        border-color: #fff77a;
+        background: #fff77a;
       }
 
       .control-button.secondary {

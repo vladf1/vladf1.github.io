@@ -4,9 +4,7 @@ import {
 } from "./swarm-common.js";
 import {
   APPLE_BITE_PERCENT_PER_SECOND,
-  Apple,
-  MAX_APPLES,
-  clampApplesToViewport
+  MAX_APPLES
 } from "./swarm-apples.js";
 import { DEFAULT_WORM_COUNT, createWorms } from "./swarm-worms.js";
 import { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
@@ -37,7 +35,7 @@ export async function startSwarmApp() {
   let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
   let worms = [];
-  let apples = [];
+  let appleVolumes = [];
   let lastAnimated = 0;
   let lastTimed = performance.now();
   let framesRendered = 0;
@@ -61,9 +59,12 @@ export async function startSwarmApp() {
 
     if (worms.length === 0) {
       recreateWorms();
+      resetDrawingSurface();
+      return;
     }
-    if (apples.length > 0) {
-      clampApplesToViewport(apples, canvasWidth, canvasHeight);
+    if (rendererReady && renderer !== null) {
+      renderer.resize(canvasWidth, canvasHeight);
+      return;
     }
     resetDrawingSurface();
   }
@@ -164,7 +165,9 @@ export async function startSwarmApp() {
       rendererStatus = "gpu" in navigator ? "WebGPU unavailable." : "WebGPU unavailable in this browser.";
       return;
     }
-    renderer.setApples(apples);
+    renderer.resetApples();
+    appleVolumes = [];
+    updateAppleStatsText();
     lastAnimated = 0;
     lastTimed = performance.now();
     framesRendered = 0;
@@ -190,54 +193,73 @@ export async function startSwarmApp() {
     lastApplePlantMs = now;
 
     const rect = canvas.getBoundingClientRect();
-    const point = event.touches?.[0] ?? event.changedTouches?.[0] ?? event;
-    const x = (point.clientX - rect.left) * canvasWidth / rect.width;
-    const y = (point.clientY - rect.top) * canvasHeight / rect.height;
-    if (apples.length >= MAX_APPLES) {
+    const { x, y } = canvasPointFromEvent(event, rect);
+    if (!rendererReady || renderer === null) {
+      return;
+    }
+    if (appleVolumes.length >= MAX_APPLES) {
       showNotice(`Max apples reached (${MAX_APPLES})`);
       return;
     }
 
-    apples.push(new Apple(x, y));
+    if (!renderer.queueApplePlacement(x, y)) {
+      showNotice("Apple queue is full");
+      return;
+    }
+
+    appleVolumes.push(1);
     updateAppleStatsText();
-    renderer?.setApples(apples);
     hint?.classList.add("is-fading");
     hint = null;
+  }
+
+  function updateApplePreview(event) {
+    if (!rendererReady || renderer === null || isControlElement(event.target)) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = canvasPointFromEvent(event, rect);
+    renderer.setApplePreview(x, y, true);
+  }
+
+  function hideApplePreview() {
+    renderer?.setApplePreview(0, 0, false);
   }
 
   function resetApples(event) {
     event?.preventDefault();
     event?.stopPropagation();
-    apples = [];
+    appleVolumes = [];
     updateAppleStatsText();
-    renderer?.setApples(apples);
+    renderer?.resetApples();
   }
 
   function syncApplesFromGpu(snapshot) {
-    const nextApples = [];
-    for (let index = 0; index < apples.length; index++) {
+    const nextAppleVolumes = [];
+    for (let index = 0; index < MAX_APPLES; index++) {
       const offset = index * 4;
       const volume = snapshot[offset + 2] ?? 0;
       if (volume <= 0) {
         continue;
       }
 
-      const apple = apples[index];
-      apple.x = snapshot[offset];
-      apple.y = snapshot[offset + 1];
-      apple.volume = volume;
-      nextApples.push(apple);
+      nextAppleVolumes.push(volume);
     }
-
-    if (nextApples.length !== apples.length) {
-      apples = nextApples;
-      renderer?.setApples(apples);
-    }
+    appleVolumes = nextAppleVolumes;
     updateAppleStatsText();
   }
 
   function updateAppleStatsText() {
-    appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
+    appleStats = appleVolumes.length === 0 ? "none" : appleVolumes.map(volume => `${Math.round(volume * 100)}%`).join(" ");
+  }
+
+  function canvasPointFromEvent(event, rect) {
+    const point = event.touches?.[0] ?? event.changedTouches?.[0] ?? event;
+    return {
+      x: (point.clientX - rect.left) * canvasWidth / rect.width,
+      y: (point.clientY - rect.top) * canvasHeight / rect.height
+    };
   }
 
   function showNotice(message) {
@@ -267,6 +289,9 @@ export async function startSwarmApp() {
     });
   }
   addEventListener("keydown", handleKeyDown);
+  canvas.addEventListener("pointermove", updateApplePreview);
+  canvas.addEventListener("pointerleave", hideApplePreview);
+  canvas.addEventListener("pointercancel", hideApplePreview);
   canvas.addEventListener("pointerdown", plantApple);
   canvas.addEventListener("touchstart", plantApple, { passive: false });
   canvas.addEventListener("mousedown", plantApple);
