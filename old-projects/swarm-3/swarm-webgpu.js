@@ -2,6 +2,7 @@ import { loadShaders } from "./swarm-common.js";
 import { Worm } from "./swarm-worms.js";
 import {
   APPLE_MAX_RADIUS,
+  APPLE_GRAVITY_RADIUS_SCALE,
   APPLE_MIN_ACTIVE_RADIUS,
   MAX_APPLES
 } from "./swarm-apples.js";
@@ -9,8 +10,10 @@ import {
 const FLOATS_PER_APPLE = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
 const APPLE_RADIUS_SEGMENTS = 96;
-const VERTICES_PER_APPLE_MARKER = 2 + APPLE_RADIUS_SEGMENTS * 2;
+const VERTICES_PER_APPLE_MARKER = 16 + APPLE_RADIUS_SEGMENTS * 2;
+const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
 const VERTICES_PER_WORM = 2;
+const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
 
 function createWebgpuPresenter(device, format, shaderSource) {
   const shader = device.createShaderModule({
@@ -65,6 +68,14 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
   const appleData = new Float32Array(MAX_APPLES * FLOATS_PER_APPLE);
   const appleMarkerData = new Float32Array(MAX_APPLES * VERTICES_PER_APPLE_MARKER * FLOATS_PER_MARKER_VERTEX);
   const appleEaterClearData = new Uint32Array(MAX_APPLES);
+  const appleFreeSlotData = new Uint32Array(MAX_APPLES);
+  const appleFreeCountData = new Uint32Array([MAX_APPLES]);
+  const applePlacementData = new Float32Array(MAX_APPLE_PLACEMENTS_PER_FRAME * FLOATS_PER_APPLE);
+  const applePreviewData = new Float32Array(VERTICES_PER_PREVIEW_MARKER * FLOATS_PER_MARKER_VERTEX);
+
+  for (let index = 0; index < MAX_APPLES; index++) {
+    appleFreeSlotData[index] = MAX_APPLES - 1 - index;
+  }
 
   for (let index = 0; index < wormCount; index++) {
     const worm = worms[index];
@@ -118,6 +129,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
     compute: {
       module: appleShader,
       entryPoint: "computeMain"
+    }
+  });
+  const applePlacementPipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: appleShader,
+      entryPoint: "placementMain"
     }
   });
   const linePipeline = device.createRenderPipeline({
@@ -210,6 +228,12 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
     size: appleEaterClearData.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   });
+  const appleFreeSlotBuffer = createStorageBuffer(device, appleFreeSlotData);
+  const appleFreeCountBuffer = createStorageBuffer(device, appleFreeCountData);
+  const applePlacementBuffer = device.createBuffer({
+    size: applePlacementData.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  });
   const appleReadbackBuffer = device.createBuffer({
     size: appleData.byteLength,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
@@ -217,6 +241,10 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
   const appleVertexBuffer = device.createBuffer({
     size: appleMarkerData.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  });
+  const applePreviewBuffer = device.createBuffer({
+    size: applePreviewData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
   const paramsBuffer = device.createBuffer({
     size: 64,
@@ -251,7 +279,20 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       { binding: 0, resource: { buffer: appleBuffer } },
       { binding: 1, resource: { buffer: appleEaterBuffer } },
       { binding: 2, resource: { buffer: appleVertexBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } }
+      { binding: 3, resource: { buffer: paramsBuffer } },
+      { binding: 4, resource: { buffer: appleFreeSlotBuffer } },
+      { binding: 5, resource: { buffer: appleFreeCountBuffer } }
+    ]
+  });
+  const applePlacementBindGroup = device.createBindGroup({
+    layout: applePlacementPipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: appleBuffer } },
+      { binding: 2, resource: { buffer: appleVertexBuffer } },
+      { binding: 3, resource: { buffer: paramsBuffer } },
+      { binding: 4, resource: { buffer: appleFreeSlotBuffer } },
+      { binding: 5, resource: { buffer: appleFreeCountBuffer } },
+      { binding: 6, resource: { buffer: applePlacementBuffer } }
     ]
   });
   const lineBindGroup = device.createBindGroup({
@@ -279,21 +320,34 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
     motionState,
     computePipeline,
     applePipeline,
+    applePlacementPipeline,
     linePipeline,
     fadePipeline,
     computeBindGroup,
     appleBindGroup,
+    applePlacementBindGroup,
     lineBindGroup,
     fadeBindGroup,
     vertexBuffer,
     appleBuffer,
     appleEaterBuffer,
+    appleFreeSlotBuffer,
+    appleFreeCountBuffer,
+    applePlacementBuffer,
     appleReadbackBuffer,
     appleEaterClearData,
+    appleFreeSlotData,
+    appleFreeCountData,
     appleVertexBuffer,
+    applePreviewBuffer,
     appleData,
     appleMarkerData,
-    appleCount: 0,
+    applePlacementData,
+    applePreviewData,
+    appleSlotCount: MAX_APPLES,
+    applePlacementCount: 0,
+    applePreviewVertexCount: 0,
+    applePreviewVisible: false,
     appleSnapshotPending: false,
     appleSnapshotHandler: null,
     paramsBuffer,
@@ -333,11 +387,19 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       this.device.queue.submit([encoder.finish()]);
     },
     drawFrame(worms, motionState, elapsedMs, fadeAmount, appleBitePercentPerSecond) {
+      const applePlacementCount = this.applePlacementCount;
+      if (applePlacementCount > 0) {
+        this.device.queue.writeBuffer(
+          this.applePlacementBuffer,
+          0,
+          this.applePlacementData.subarray(0, applePlacementCount * FLOATS_PER_APPLE)
+        );
+      }
       this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
         this.width,
         this.height,
         this.wormCount,
-        this.appleCount,
+        this.appleSlotCount,
         elapsedMs,
         appleBitePercentPerSecond,
         APPLE_MIN_ACTIVE_RADIUS,
@@ -346,7 +408,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
         Worm.changeDirectionMs,
         Worm.maxRandomAngleChange,
         0,
-        0,
+        applePlacementCount,
         0,
         0,
         0
@@ -377,12 +439,18 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       computePass.dispatchWorkgroups(Math.ceil(this.wormCount / 256));
       computePass.end();
 
-      if (this.appleCount > 0) {
-        const applePass = encoder.beginComputePass();
-        applePass.setPipeline(this.applePipeline);
-        applePass.setBindGroup(0, this.appleBindGroup);
-        applePass.dispatchWorkgroups(Math.ceil(this.appleCount / 64));
-        applePass.end();
+      const applePass = encoder.beginComputePass();
+      applePass.setPipeline(this.applePipeline);
+      applePass.setBindGroup(0, this.appleBindGroup);
+      applePass.dispatchWorkgroups(Math.ceil(this.appleSlotCount / 64));
+      applePass.end();
+
+      if (applePlacementCount > 0) {
+        const placementPass = encoder.beginComputePass();
+        placementPass.setPipeline(this.applePlacementPipeline);
+        placementPass.setBindGroup(0, this.applePlacementBindGroup);
+        placementPass.dispatchWorkgroups(1);
+        placementPass.end();
       }
 
       const linePass = encoder.beginRenderPass({
@@ -404,26 +472,39 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       const targetView = this.context.getCurrentTexture().createView();
       this.presentTrail(encoder, targetView);
       this.drawAppleOverlay(encoder, targetView);
+      this.drawApplePreview(encoder, targetView);
       this.device.queue.submit([encoder.finish()]);
+      this.applePlacementCount = 0;
       if (shouldReadApples) {
         this.readApples();
       }
     },
-    setApples(apples) {
-      this.appleCount = Math.min(apples.length, MAX_APPLES);
-      this.appleData.fill(0);
-      this.appleMarkerData.fill(0);
-
-      for (let index = 0; index < this.appleCount; index++) {
-        const apple = apples[index];
-        const radius = apple.isVisible ? apple.radius : 0;
-        const x = apple.x;
-        const y = apple.y;
-        this.appleData.set([x, y, apple.volume, radius], index * FLOATS_PER_APPLE);
+    queueApplePlacement(x, y) {
+      if (this.applePlacementCount >= MAX_APPLE_PLACEMENTS_PER_FRAME) {
+        return false;
       }
 
+      this.applePlacementData.set([
+        x,
+        y,
+        1,
+        APPLE_MAX_RADIUS
+      ], this.applePlacementCount * FLOATS_PER_APPLE);
+      this.applePlacementCount++;
+      return true;
+    },
+    resetApples() {
+      this.appleData.fill(0);
+      this.appleMarkerData.fill(0);
+      for (let index = 0; index < MAX_APPLES; index++) {
+        this.appleFreeSlotData[index] = MAX_APPLES - 1 - index;
+      }
+      this.appleFreeCountData[0] = MAX_APPLES;
+      this.applePlacementCount = 0;
       this.device.queue.writeBuffer(this.appleBuffer, 0, this.appleData);
       this.device.queue.writeBuffer(this.appleEaterBuffer, 0, this.appleEaterClearData);
+      this.device.queue.writeBuffer(this.appleFreeSlotBuffer, 0, this.appleFreeSlotData);
+      this.device.queue.writeBuffer(this.appleFreeCountBuffer, 0, this.appleFreeCountData);
       this.device.queue.writeBuffer(this.appleVertexBuffer, 0, this.appleMarkerData);
     },
     requestAppleSnapshot(handler) {
@@ -471,7 +552,56 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       pass.end();
     },
     drawAppleOverlay(encoder, targetView) {
-      if (this.appleCount === 0) {
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: targetView,
+          loadOp: "load",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this.linePipeline);
+      pass.setBindGroup(0, this.lineBindGroup);
+      pass.setVertexBuffer(0, this.appleVertexBuffer);
+      pass.draw(this.appleSlotCount * VERTICES_PER_APPLE_MARKER);
+      pass.end();
+    },
+    setApplePreview(x, y, visible) {
+      if (!visible) {
+        this.applePreviewVisible = false;
+        this.applePreviewVertexCount = 0;
+        return;
+      }
+
+      this.applePreviewData.fill(0);
+      let markerIndex = 0;
+      markerIndex = writeCircleVertices(
+        this.applePreviewData,
+        markerIndex,
+        x,
+        y,
+        APPLE_MAX_RADIUS * APPLE_GRAVITY_RADIUS_SCALE,
+        1,
+        0.9,
+        0.15,
+        0.16
+      );
+      markerIndex = writeCircleVertices(
+        this.applePreviewData,
+        markerIndex,
+        x,
+        y,
+        APPLE_MAX_RADIUS,
+        1,
+        0.12,
+        0.22,
+        0.62
+      );
+      this.applePreviewVisible = true;
+      this.applePreviewVertexCount = markerIndex / FLOATS_PER_MARKER_VERTEX;
+      this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
+    },
+    drawApplePreview(encoder, targetView) {
+      if (!this.applePreviewVisible || this.applePreviewVertexCount === 0) {
         return;
       }
 
@@ -484,14 +614,14 @@ export async function createWebgpuComputeRenderer(canvas, width, height, worms, 
       });
       pass.setPipeline(this.linePipeline);
       pass.setBindGroup(0, this.lineBindGroup);
-      pass.setVertexBuffer(0, this.appleVertexBuffer);
-      pass.draw(this.appleCount * VERTICES_PER_APPLE_MARKER);
+      pass.setVertexBuffer(0, this.applePreviewBuffer);
+      pass.draw(this.applePreviewVertexCount);
       pass.end();
     },
     readApples() {
       this.appleSnapshotPending = true;
       this.appleReadbackBuffer.mapAsync(GPUMapMode.READ).then(() => {
-        const snapshot = new Float32Array(this.appleReadbackBuffer.getMappedRange()).slice(0, this.appleCount * FLOATS_PER_APPLE);
+        const snapshot = new Float32Array(this.appleReadbackBuffer.getMappedRange()).slice(0, this.appleSlotCount * FLOATS_PER_APPLE);
         this.appleReadbackBuffer.unmap();
         this.appleSnapshotPending = false;
         const handler = this.appleSnapshotHandler;
@@ -518,4 +648,44 @@ function createStorageBuffer(device, data) {
   });
   device.queue.writeBuffer(buffer, 0, data);
   return buffer;
+}
+
+function writeCircleVertices(vertices, index, centerX, centerY, radius, red, green, blue, alpha) {
+  for (let segment = 0; segment < APPLE_RADIUS_SEGMENTS; segment++) {
+    const startAngle = segment / APPLE_RADIUS_SEGMENTS * Math.PI * 2;
+    const endAngle = (segment + 1) / APPLE_RADIUS_SEGMENTS * Math.PI * 2;
+    index = writeMarkerVertex(
+      vertices,
+      index,
+      centerX + Math.cos(startAngle) * radius,
+      centerY + Math.sin(startAngle) * radius,
+      red,
+      green,
+      blue,
+      alpha
+    );
+    index = writeMarkerVertex(
+      vertices,
+      index,
+      centerX + Math.cos(endAngle) * radius,
+      centerY + Math.sin(endAngle) * radius,
+      red,
+      green,
+      blue,
+      alpha
+    );
+  }
+  return index;
+}
+
+function writeMarkerVertex(vertices, index, x, y, red, green, blue, alpha) {
+  vertices[index++] = x;
+  vertices[index++] = y;
+  vertices[index++] = 0;
+  vertices[index++] = 0;
+  vertices[index++] = red;
+  vertices[index++] = green;
+  vertices[index++] = blue;
+  vertices[index++] = alpha;
+  return index;
 }
