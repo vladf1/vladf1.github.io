@@ -90,6 +90,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   var angleStepPerMs = motionC[index].x;
   var angleChangeMsLeft = motionC[index].y;
   let startPosition = position.xy;
+  var appleGlow = 0.0;
+  var eatingGlow = 0.0;
 
   if (appleCount > 0u) {
     var attraction = vec2f(0.0, 0.0);
@@ -141,7 +143,9 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
     if (eatenAppleIndex < appleCount) {
       atomicAdd(&appleEaters[eatenAppleIndex], 1u);
+      eatingGlow = 1.0;
     }
+    appleGlow = max(clamp(strongestPull * 3.0, 0.0, 1.0), eatingGlow);
 
     let weakerChance = 0.08 + 0.20 * clamp(secondPull / max(strongestPull, 0.0001), 0.0, 1.0);
     if (secondPull > 0.0 && randomUnit(index) < weakerChance) {
@@ -203,7 +207,11 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
   let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let color = wormColor(index);
+  let baseColor = wormColor(index);
+  let appleTint = vec3f(1.0, 0.18, 0.05);
+  let eatingTint = vec3f(1.0, 0.92, 0.3);
+  let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
+  let color = vec4f(mix(attractedColor, eatingTint, eatingGlow * 0.55), min(1.0, baseColor.a + appleGlow * 0.14));
   vertices[index * 2u] = LineVertex(clampedStart, color);
   vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 
