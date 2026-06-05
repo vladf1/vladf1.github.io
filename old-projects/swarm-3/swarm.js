@@ -1,18 +1,12 @@
 import {
-  DEFAULT_FADE_AMOUNT,
-  FADE_AMOUNT_PER_MS_SCALE
-} from "./swarm-common.js";
-import {
   APPLE_BITE_PERCENT_PER_SECOND,
-  MAX_APPLES
-} from "./swarm-apples.js";
-import { DEFAULT_WORM_COUNT, MAX_SAFE_WORM_COUNT } from "./swarm-worms.js";
-import { createWebgpuComputeRenderer, getWebgpuWormLimit } from "./swarm-webgpu.js";
-
-export * from "./swarm-common.js";
-export * from "./swarm-apples.js";
-export * from "./swarm-worms.js";
-export { createWebgpuComputeRenderer, getWebgpuWormLimit } from "./swarm-webgpu.js";
+  DEFAULT_FADE_AMOUNT,
+  DEFAULT_WORM_COUNT,
+  FADE_AMOUNT_PER_MS_SCALE,
+  MAX_APPLES,
+  MAX_SAFE_WORM_COUNT,
+  createWebgpuComputeRenderer
+} from "./swarm-webgpu.js";
 
 export async function startSwarmApp() {
   let canvas = document.querySelector("#swarm");
@@ -25,8 +19,11 @@ export async function startSwarmApp() {
 
   const params = new URLSearchParams(location.search);
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites"), 10);
-  let wormCount = Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : DEFAULT_WORM_COUNT;
-  let maxWormCount = Infinity;
+  let wormCount = Math.min(
+    Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : DEFAULT_WORM_COUNT,
+    MAX_SAFE_WORM_COUNT
+  );
+  let maxWormCount = MAX_SAFE_WORM_COUNT;
   let appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
   const fadeAmountPerMs = DEFAULT_FADE_AMOUNT * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
@@ -45,17 +42,10 @@ export async function startSwarmApp() {
   let pendingAnimationFrameId = 0;
   let lastApplePlantMs = 0;
   let noticeTimeoutId = 0;
-  const motionState = {
-    width: canvasWidth,
-    height: canvasHeight
-  };
-
   function resize() {
     const rect = canvas.getBoundingClientRect();
     canvasWidth = Math.max(1, Math.floor(rect.width));
     canvasHeight = Math.max(1, Math.floor(rect.height));
-    motionState.width = canvasWidth;
-    motionState.height = canvasHeight;
 
     if (rendererReady && renderer !== null) {
       renderer.resize(canvasWidth, canvasHeight);
@@ -87,7 +77,7 @@ export async function startSwarmApp() {
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
     try {
-      renderer.drawFrame(motionState, elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
+      renderer.drawFrame(elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
     } catch (error) {
       rendererReady = false;
       rendererStatus = error instanceof Error ? error.message : "WebGPU frame failed";
@@ -152,7 +142,7 @@ export async function startSwarmApp() {
     renderer = null;
     try {
       renderer = await Promise.race([
-        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, wormCount, motionState),
+        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, wormCount),
         new Promise((resolve, reject) => {
           setTimeout(() => reject(new Error("WebGPU initialization timed out")), 4000);
         })
@@ -170,6 +160,8 @@ export async function startSwarmApp() {
       rendererStatus = "gpu" in navigator ? "WebGPU unavailable." : "WebGPU unavailable in this browser.";
       return;
     }
+    maxWormCount = Math.min(renderer.maxSupportedWormCount, MAX_SAFE_WORM_COUNT);
+    wormCountInput.max = String(maxWormCount);
     renderer.resetApples();
     renderer.device.lost.then((info) => {
       if (generation !== rendererGeneration) {
@@ -315,16 +307,9 @@ export async function startSwarmApp() {
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
 
   syncControls();
-  try {
-    maxWormCount = Math.min(await getWebgpuWormLimit(), MAX_SAFE_WORM_COUNT);
-  } catch {
-    maxWormCount = MAX_SAFE_WORM_COUNT;
-  }
-  if (wormCount > maxWormCount) {
-    showNotice(`WebGPU limit: ${maxWormCount.toLocaleString()} worms`);
-    wormCount = maxWormCount;
-    appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
-    syncControls();
+  wormCountInput.max = String(maxWormCount);
+  if (Number.isFinite(initialWormCount) && initialWormCount > MAX_SAFE_WORM_COUNT) {
+    showNotice(`WebGPU limit: ${MAX_SAFE_WORM_COUNT.toLocaleString()} worms`);
   }
   writeConfigToUrl();
   resize();
