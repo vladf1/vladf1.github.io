@@ -1,12 +1,16 @@
-import { loadShaders } from "./swarm-common.js";
-import { Worm } from "./swarm-worms.js";
-import {
-  APPLE_MAX_RADIUS,
-  APPLE_GRAVITY_RADIUS_SCALE,
-  APPLE_MIN_ACTIVE_RADIUS,
-  MAX_APPLES
-} from "./swarm-apples.js";
+export const DEFAULT_WORM_COUNT = 2500;
+export const MAX_SAFE_WORM_COUNT = 2000000;
+export const MAX_APPLES = 128;
+export const APPLE_BITE_PERCENT_PER_SECOND = 0.00016;
+export const DEFAULT_FADE_AMOUNT = 0.1;
+export const FADE_AMOUNT_PER_MS_SCALE = 0.06;
 
+const WORM_APPLE_TURN_MS = 83.33333333333333;
+const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
+const WORM_MAX_RANDOM_ANGLE_CHANGE = 1.5;
+const APPLE_MAX_RADIUS = 62;
+const APPLE_MIN_ACTIVE_RADIUS = 15;
+const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
 const FLOATS_PER_APPLE = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
 const APPLE_RADIUS_SEGMENTS = 96;
@@ -20,6 +24,25 @@ const BYTES_PER_WORM_VEC4_BUFFER = FLOATS_PER_WORM_VEC4_BUFFER * Float32Array.BY
 const BYTES_PER_RANDOM_STATE = Uint32Array.BYTES_PER_ELEMENT;
 const COMPUTE_VERTEX_STRIDE = 32;
 let webgpuContextPromise = null;
+const shaderTextPromises = new Map();
+
+function loadShaders(shaders) {
+  return Promise.all(shaders.map(loadShaderText));
+}
+
+function loadShaderText(fileName) {
+  let shaderPromise = shaderTextPromises.get(fileName);
+  if (shaderPromise === undefined) {
+    shaderPromise = fetch(new URL(`./shaders/${fileName}`, import.meta.url)).then((response) => {
+      if (!response.ok) {
+        throw new Error(`Unable to load shader: ${fileName}`);
+      }
+      return response.text();
+    });
+    shaderTextPromises.set(fileName, shaderPromise);
+  }
+  return shaderPromise;
+}
 
 function createWebgpuPresenter(device, format, shaderSource) {
   const shader = device.createShaderModule({
@@ -50,7 +73,7 @@ function createWebgpuPresenter(device, format, shaderSource) {
   };
 }
 
-export async function createWebgpuComputeRenderer(canvas, width, height, wormCount, motionState) {
+export async function createWebgpuComputeRenderer(canvas, width, height, wormCount) {
   const { device } = await getWebgpuContext();
   const context = canvas.getContext("webgpu");
   const format = navigator.gpu.getPreferredCanvasFormat();
@@ -270,7 +293,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     height: 0,
     wormCount,
     capacityWormCount,
-    motionState,
     maxSupportedWormCount,
     wormResources,
     computePipeline,
@@ -395,9 +417,9 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
         0,
         APPLE_MIN_ACTIVE_RADIUS,
         APPLE_MAX_RADIUS,
-        Worm.appleTurnMs,
-        Worm.changeDirectionMs,
-        Worm.maxRandomAngleChange,
+        WORM_APPLE_TURN_MS,
+        WORM_CHANGE_DIRECTION_MS,
+        WORM_MAX_RANDOM_ANGLE_CHANGE,
         0,
         startIndex,
         endIndex,
@@ -426,7 +448,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
     },
-    drawFrame(motionState, elapsedMs, fadeAmount, appleBitePercentPerSecond) {
+    drawFrame(elapsedMs, fadeAmount, appleBitePercentPerSecond) {
       const applePlacementCount = this.applePlacementCount;
       if (applePlacementCount > 0) {
         this.device.queue.writeBuffer(
@@ -444,9 +466,9 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
         appleBitePercentPerSecond,
         APPLE_MIN_ACTIVE_RADIUS,
         APPLE_MAX_RADIUS,
-        Worm.appleTurnMs,
-        Worm.changeDirectionMs,
-        Worm.maxRandomAngleChange,
+        WORM_APPLE_TURN_MS,
+        WORM_CHANGE_DIRECTION_MS,
+        WORM_MAX_RANDOM_ANGLE_CHANGE,
         0,
         applePlacementCount,
         0,
@@ -680,11 +702,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   renderer.resize(width, height);
   renderer.initWormRange(0, wormCount);
   return renderer;
-}
-
-export async function getWebgpuWormLimit() {
-  const { device } = await getWebgpuContext();
-  return getMaxSupportedWormCount(device);
 }
 
 async function getWebgpuContext() {
