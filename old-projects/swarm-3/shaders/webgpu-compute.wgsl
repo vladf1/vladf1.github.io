@@ -16,7 +16,7 @@ struct LineVertex {
 
 struct Apple {
   position: vec2f,
-  strength: f32,
+  volume: f32,
   radius: f32,
 };
 
@@ -98,17 +98,18 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     var secondPull = 0.0;
     for (var appleIndex = 0u; appleIndex < appleCount; appleIndex++) {
       let apple = apples[appleIndex];
-      if (apple.radius <= 0.0 || apple.strength <= 0.0) {
+      if (apple.radius <= 0.0 || apple.volume <= 0.0) {
         continue;
       }
 
+      let appleStrength = 0.1 + 0.9 * sqrt(apple.volume);
       let appleDelta = apple.position - position.xy;
       if (dot(appleDelta, appleDelta) <= apple.radius * apple.radius) {
         atomicAdd(&appleEaters[appleIndex], 1u);
       }
 
       let gravityRadius = max(apple.radius * APPLE_GRAVITY_RADIUS_SCALE, apple.radius + 1.0);
-      let delta = apple.position - position.xy + offset * apple.strength;
+      let delta = apple.position - position.xy + offset * appleStrength;
       let distanceSquared = max(dot(delta, delta), 16.0);
       let radiusSquared = gravityRadius * gravityRadius;
       if (distanceSquared < radiusSquared) {
@@ -117,7 +118,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
         let outerFalloff = 1.0 - distance / gravityRadius;
         let innerDistance = clamp(distance / minimumPullDistance, 0.0, 1.0);
         let innerFalloff = smoothstep(0.0, 1.0, innerDistance);
-        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * (0.04 + 0.96 * innerFalloff) * apple.strength;
+        let pull = outerFalloff * outerFalloff * outerFalloff * outerFalloff * (0.04 + 0.96 * innerFalloff) * appleStrength;
         let inward = normalize(delta);
         let randomAngle = randomUnit(index) * TWO_PI;
         let randomDirection = vec2f(cos(randomAngle), sin(randomAngle));
