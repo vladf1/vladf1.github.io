@@ -6,8 +6,7 @@ import {
   APPLE_BITE_PERCENT_PER_SECOND,
   Apple,
   MAX_APPLES,
-  clampApplesToViewport,
-  updateApples
+  clampApplesToViewport
 } from "./swarm-apples.js";
 import { DEFAULT_WORM_COUNT, createWorms } from "./swarm-worms.js";
 import { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
@@ -43,6 +42,7 @@ export async function startSwarmApp() {
   let lastTimed = performance.now();
   let framesRendered = 0;
   let fps = null;
+  let appleStats = "none";
   let paused = false;
   let pendingAnimationFrameId = 0;
   let lastApplePlantMs = 0;
@@ -86,13 +86,12 @@ export async function startSwarmApp() {
       fps = framesRendered;
       framesRendered = 0;
       lastTimed = now;
+      renderer.requestAppleSnapshot(syncApplesFromGpu);
     }
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
-    renderer.setApples(apples);
-    renderer.drawFrame(worms, motionState, elapsedMs, frameFadeAmount);
+    renderer.drawFrame(worms, motionState, elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
 
-    const appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
     stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}`;
     framesRendered++;
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
@@ -165,9 +164,6 @@ export async function startSwarmApp() {
       rendererStatus = "gpu" in navigator ? "WebGPU unavailable." : "WebGPU unavailable in this browser.";
       return;
     }
-    renderer.setAppleEatersHandler((eaterCounts, elapsedMs) => {
-      updateApples(apples, eaterCounts, elapsedMs, appleBitePercentPerSecond);
-    });
     renderer.setApples(apples);
     lastAnimated = 0;
     lastTimed = performance.now();
@@ -203,6 +199,7 @@ export async function startSwarmApp() {
     }
 
     apples.push(new Apple(x, y));
+    updateAppleStatsText();
     renderer?.setApples(apples);
     hint?.classList.add("is-fading");
     hint = null;
@@ -212,7 +209,35 @@ export async function startSwarmApp() {
     event?.preventDefault();
     event?.stopPropagation();
     apples = [];
+    updateAppleStatsText();
     renderer?.setApples(apples);
+  }
+
+  function syncApplesFromGpu(snapshot) {
+    const nextApples = [];
+    for (let index = 0; index < apples.length; index++) {
+      const offset = index * 4;
+      const volume = snapshot[offset + 2] ?? 0;
+      if (volume <= 0) {
+        continue;
+      }
+
+      const apple = apples[index];
+      apple.x = snapshot[offset];
+      apple.y = snapshot[offset + 1];
+      apple.volume = volume;
+      nextApples.push(apple);
+    }
+
+    if (nextApples.length !== apples.length) {
+      apples = nextApples;
+      renderer?.setApples(apples);
+    }
+    updateAppleStatsText();
+  }
+
+  function updateAppleStatsText() {
+    appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
   }
 
   function showNotice(message) {
