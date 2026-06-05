@@ -6,13 +6,13 @@ import {
   APPLE_BITE_PERCENT_PER_SECOND,
   MAX_APPLES
 } from "./swarm-apples.js";
-import { DEFAULT_WORM_COUNT, createWorms } from "./swarm-worms.js";
-import { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
+import { DEFAULT_WORM_COUNT, MAX_SAFE_WORM_COUNT } from "./swarm-worms.js";
+import { createWebgpuComputeRenderer, getWebgpuWormLimit } from "./swarm-webgpu.js";
 
 export * from "./swarm-common.js";
 export * from "./swarm-apples.js";
 export * from "./swarm-worms.js";
-export { createWebgpuComputeRenderer } from "./swarm-webgpu.js";
+export { createWebgpuComputeRenderer, getWebgpuWormLimit } from "./swarm-webgpu.js";
 
 export async function startSwarmApp() {
   let canvas = document.querySelector("#swarm");
@@ -26,6 +26,7 @@ export async function startSwarmApp() {
   const params = new URLSearchParams(location.search);
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites"), 10);
   let wormCount = Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : DEFAULT_WORM_COUNT;
+  let maxWormCount = Infinity;
   let appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
   const fadeAmountPerMs = DEFAULT_FADE_AMOUNT * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
@@ -34,7 +35,6 @@ export async function startSwarmApp() {
   let rendererReady = false;
   let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
-  let worms = [];
   let appleVolumes = [];
   let lastAnimated = 0;
   let lastTimed = performance.now();
@@ -57,11 +57,6 @@ export async function startSwarmApp() {
     motionState.width = canvasWidth;
     motionState.height = canvasHeight;
 
-    if (worms.length === 0) {
-      recreateWorms();
-      resetDrawingSurface();
-      return;
-    }
     if (rendererReady && renderer !== null) {
       renderer.resize(canvasWidth, canvasHeight);
       return;
@@ -91,7 +86,14 @@ export async function startSwarmApp() {
     }
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
-    renderer.drawFrame(worms, motionState, elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
+    try {
+      renderer.drawFrame(motionState, elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
+    } catch (error) {
+      rendererReady = false;
+      rendererStatus = error instanceof Error ? error.message : "WebGPU frame failed";
+      stats.textContent = rendererStatus;
+      return;
+    }
 
     stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}`;
     framesRendered++;
@@ -122,21 +124,24 @@ export async function startSwarmApp() {
 
   function setWormCount(value) {
     const parsed = Number.parseInt(value, 10);
-    const nextWormCount = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WORM_COUNT;
+    const nextWormCount = Math.min(
+      Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WORM_COUNT,
+      maxWormCount
+    );
     if (nextWormCount === wormCount) {
       wormCountInput.value = String(wormCount);
       return;
     }
+    if (Number.isFinite(parsed) && parsed > maxWormCount) {
+      showNotice(`WebGPU limit: ${maxWormCount.toLocaleString()} worms`);
+    }
     wormCount = nextWormCount;
     appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
     wormCountInput.value = String(wormCount);
-    recreateWorms();
-    resetDrawingSurface();
+    if (!rendererReady || renderer === null || !renderer.setWormCount(wormCount)) {
+      resetDrawingSurface();
+    }
     writeConfigToUrl();
-  }
-
-  function recreateWorms() {
-    worms = createWorms(wormCount, canvasWidth, canvasHeight, Math.random);
   }
 
   async function resetDrawingSurface() {
@@ -147,7 +152,7 @@ export async function startSwarmApp() {
     renderer = null;
     try {
       renderer = await Promise.race([
-        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, worms, motionState),
+        createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, wormCount, motionState),
         new Promise((resolve, reject) => {
           setTimeout(() => reject(new Error("WebGPU initialization timed out")), 4000);
         })
@@ -166,6 +171,15 @@ export async function startSwarmApp() {
       return;
     }
     renderer.resetApples();
+    renderer.device.lost.then((info) => {
+      if (generation !== rendererGeneration) {
+        return;
+      }
+      rendererReady = false;
+      renderer = null;
+      rendererStatus = `WebGPU device lost: ${info.message || info.reason}`;
+      stats.textContent = rendererStatus;
+    });
     appleVolumes = [];
     updateAppleStatsText();
     lastAnimated = 0;
@@ -301,6 +315,17 @@ export async function startSwarmApp() {
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
 
   syncControls();
+  try {
+    maxWormCount = Math.min(await getWebgpuWormLimit(), MAX_SAFE_WORM_COUNT);
+  } catch {
+    maxWormCount = MAX_SAFE_WORM_COUNT;
+  }
+  if (wormCount > maxWormCount) {
+    showNotice(`WebGPU limit: ${maxWormCount.toLocaleString()} worms`);
+    wormCount = maxWormCount;
+    appleBitePercentPerSecond = APPLE_BITE_PERCENT_PER_SECOND * DEFAULT_WORM_COUNT / wormCount;
+    syncControls();
+  }
   writeConfigToUrl();
   resize();
   startAnimation();

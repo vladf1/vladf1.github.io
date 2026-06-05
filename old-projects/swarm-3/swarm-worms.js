@@ -1,6 +1,7 @@
 import { randomBetween } from "./swarm-common.js";
 
 export const DEFAULT_WORM_COUNT = 2500;
+export const MAX_SAFE_WORM_COUNT = 2000000;
 const TWO_PI = Math.PI * 2;
 
 export class Worm {
