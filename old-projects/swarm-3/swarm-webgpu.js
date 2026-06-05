@@ -15,6 +15,11 @@ const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
 const VERTICES_PER_WORM = 2;
 const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
 const WORM_CAPACITY_BUCKET_SIZE = 250000;
+const FLOATS_PER_WORM_VEC4_BUFFER = 4;
+const BYTES_PER_WORM_VEC4_BUFFER = FLOATS_PER_WORM_VEC4_BUFFER * Float32Array.BYTES_PER_ELEMENT;
+const BYTES_PER_RANDOM_STATE = Uint32Array.BYTES_PER_ELEMENT;
+const COMPUTE_VERTEX_STRIDE = 32;
+let webgpuContextPromise = null;
 
 function createWebgpuPresenter(device, format, shaderSource) {
   const shader = device.createShaderModule({
@@ -46,30 +51,21 @@ function createWebgpuPresenter(device, format, shaderSource) {
 }
 
 export async function createWebgpuComputeRenderer(canvas, width, height, wormCount, motionState) {
-  if (!("gpu" in navigator)) {
-    throw new Error("WebGPU unavailable in this browser.");
-  }
-
-  const adapter = await navigator.gpu.requestAdapter();
-  if (adapter === null) {
-    throw new Error("WebGPU adapter unavailable.");
-  }
-
-  const device = await adapter.requestDevice();
+  const { device } = await getWebgpuContext();
   const context = canvas.getContext("webgpu");
   const format = navigator.gpu.getPreferredCanvasFormat();
-  const computeVertexStride = 32;
-  const maxSupportedWormCount = getMaxSupportedWormCount(device, computeVertexStride);
+  const maxSupportedWormCount = getMaxSupportedWormCount(device, COMPUTE_VERTEX_STRIDE);
   if (wormCount > maxSupportedWormCount) {
     throw new Error(`WebGPU limit reached. Try ${maxSupportedWormCount.toLocaleString()} worms or fewer.`);
   }
   const capacityWormCount = getWormCapacity(wormCount, maxSupportedWormCount);
-  const lineVertexCapacity = capacityWormCount * VERTICES_PER_WORM;
   const positionData = new Float32Array(capacityWormCount * 4);
   const motionAData = new Float32Array(capacityWormCount * 4);
   const motionBData = new Float32Array(capacityWormCount * 4);
   const motionCData = new Float32Array(capacityWormCount * 4);
   const randomData = new Uint32Array(capacityWormCount);
+  initializeWormData(positionData, motionAData, motionBData, motionCData, randomData, 0, wormCount, width, height);
+  const wormResources = createWormResourcesFromData(device, capacityWormCount, positionData, motionAData, motionBData, motionCData, randomData);
   const appleData = new Float32Array(MAX_APPLES * FLOATS_PER_APPLE);
   const appleMarkerData = new Float32Array(MAX_APPLES * VERTICES_PER_APPLE_MARKER * FLOATS_PER_MARKER_VERTEX);
   const appleEaterClearData = new Uint32Array(MAX_APPLES);
@@ -81,8 +77,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   for (let index = 0; index < MAX_APPLES; index++) {
     appleFreeSlotData[index] = MAX_APPLES - 1 - index;
   }
-
-  initializeWormData(positionData, motionAData, motionBData, motionCData, randomData, 0, wormCount, width, height);
 
   const [presentShaderSource, computeShaderSource, appleShaderSource, lineShaderSource, fadeShaderSource] = await loadShaders([
     "webgpu-present.wgsl",
@@ -122,7 +116,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       module: lineShader,
       entryPoint: "vertexMain",
       buffers: [{
-        arrayStride: computeVertexStride,
+        arrayStride: COMPUTE_VERTEX_STRIDE,
         attributes: [
           {
             shaderLocation: 0,
@@ -189,15 +183,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       topology: "triangle-list"
     }
   });
-  const positionBuffer = createStorageBuffer(device, positionData);
-  const motionABuffer = createStorageBuffer(device, motionAData);
-  const motionBBuffer = createStorageBuffer(device, motionBData);
-  const motionCBuffer = createStorageBuffer(device, motionCData);
-  const randomBuffer = createStorageBuffer(device, randomData);
-  const vertexBuffer = device.createBuffer({
-    size: lineVertexCapacity * computeVertexStride,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
-  });
   const appleBuffer = device.createBuffer({
     size: appleData.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
@@ -237,20 +222,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
   const presenter = createWebgpuPresenter(device, format, presentShaderSource);
-  const computeBindGroup = device.createBindGroup({
-    layout: computePipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: positionBuffer } },
-      { binding: 1, resource: { buffer: motionABuffer } },
-      { binding: 2, resource: { buffer: motionBBuffer } },
-      { binding: 3, resource: { buffer: motionCBuffer } },
-      { binding: 4, resource: { buffer: randomBuffer } },
-      { binding: 5, resource: { buffer: vertexBuffer } },
-      { binding: 6, resource: { buffer: paramsBuffer } },
-      { binding: 7, resource: { buffer: appleBuffer } },
-      { binding: 8, resource: { buffer: appleEaterBuffer } }
-    ]
-  });
+  const computeBindGroup = createComputeBindGroup(device, computePipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer);
   const appleBindGroup = device.createBindGroup({
     layout: applePipeline.getBindGroupLayout(0),
     entries: [
@@ -297,6 +269,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     wormCount,
     capacityWormCount,
     motionState,
+    maxSupportedWormCount,
+    wormResources,
     computePipeline,
     applePipeline,
     applePlacementPipeline,
@@ -307,12 +281,12 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     applePlacementBindGroup,
     lineBindGroup,
     fadeBindGroup,
-    vertexBuffer,
-    positionBuffer,
-    motionABuffer,
-    motionBBuffer,
-    motionCBuffer,
-    randomBuffer,
+    vertexBuffer: wormResources.vertexBuffer,
+    positionBuffer: wormResources.positionBuffer,
+    motionABuffer: wormResources.motionABuffer,
+    motionBBuffer: wormResources.motionBBuffer,
+    motionCBuffer: wormResources.motionCBuffer,
+    randomBuffer: wormResources.randomBuffer,
     appleBuffer,
     appleEaterBuffer,
     appleFreeSlotBuffer,
@@ -362,11 +336,14 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       this.clear();
     },
     setWormCount(nextWormCount) {
-      if (nextWormCount > this.capacityWormCount) {
-        return false;
+      if (nextWormCount > this.maxSupportedWormCount) {
+        throw new Error(`WebGPU limit reached. Try ${this.maxSupportedWormCount.toLocaleString()} worms or fewer.`);
       }
 
       const previousWormCount = this.wormCount;
+      if (nextWormCount > this.capacityWormCount) {
+        this.growWormCapacity(nextWormCount);
+      }
       this.wormCount = nextWormCount;
       if (nextWormCount <= previousWormCount) {
         return true;
@@ -383,12 +360,51 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
         this.width,
         this.height
       );
-      this.device.queue.writeBuffer(this.positionBuffer, previousWormCount * 4 * Float32Array.BYTES_PER_ELEMENT, this.positionData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionABuffer, previousWormCount * 4 * Float32Array.BYTES_PER_ELEMENT, this.motionAData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionBBuffer, previousWormCount * 4 * Float32Array.BYTES_PER_ELEMENT, this.motionBData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.motionCBuffer, previousWormCount * 4 * Float32Array.BYTES_PER_ELEMENT, this.motionCData.subarray(previousWormCount * 4, nextWormCount * 4));
-      this.device.queue.writeBuffer(this.randomBuffer, previousWormCount * Uint32Array.BYTES_PER_ELEMENT, this.randomData.subarray(previousWormCount, nextWormCount));
+      this.device.queue.writeBuffer(this.positionBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.positionData.subarray(previousWormCount * 4, nextWormCount * 4));
+      this.device.queue.writeBuffer(this.motionABuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionAData.subarray(previousWormCount * 4, nextWormCount * 4));
+      this.device.queue.writeBuffer(this.motionBBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionBData.subarray(previousWormCount * 4, nextWormCount * 4));
+      this.device.queue.writeBuffer(this.motionCBuffer, previousWormCount * BYTES_PER_WORM_VEC4_BUFFER, this.motionCData.subarray(previousWormCount * 4, nextWormCount * 4));
+      this.device.queue.writeBuffer(this.randomBuffer, previousWormCount * BYTES_PER_RANDOM_STATE, this.randomData.subarray(previousWormCount, nextWormCount));
       return true;
+    },
+    growWormCapacity(nextWormCount) {
+      const previousResources = this.wormResources;
+      const nextCapacity = getWormCapacity(nextWormCount, this.maxSupportedWormCount);
+      const nextResources = createWormResources(this.device, nextCapacity);
+      const nextPositionData = new Float32Array(nextCapacity * 4);
+      const nextMotionAData = new Float32Array(nextCapacity * 4);
+      const nextMotionBData = new Float32Array(nextCapacity * 4);
+      const nextMotionCData = new Float32Array(nextCapacity * 4);
+      const nextRandomData = new Uint32Array(nextCapacity);
+      const encoder = this.device.createCommandEncoder();
+      copyWormBufferRange(encoder, previousResources.positionBuffer, nextResources.positionBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
+      copyWormBufferRange(encoder, previousResources.motionABuffer, nextResources.motionABuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
+      copyWormBufferRange(encoder, previousResources.motionBBuffer, nextResources.motionBBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
+      copyWormBufferRange(encoder, previousResources.motionCBuffer, nextResources.motionCBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
+      copyWormBufferRange(encoder, previousResources.randomBuffer, nextResources.randomBuffer, this.wormCount * BYTES_PER_RANDOM_STATE);
+      this.device.queue.submit([encoder.finish()]);
+
+      this.wormResources = nextResources;
+      this.capacityWormCount = nextCapacity;
+      this.positionBuffer = nextResources.positionBuffer;
+      this.motionABuffer = nextResources.motionABuffer;
+      this.motionBBuffer = nextResources.motionBBuffer;
+      this.motionCBuffer = nextResources.motionCBuffer;
+      this.randomBuffer = nextResources.randomBuffer;
+      this.vertexBuffer = nextResources.vertexBuffer;
+      this.positionData = nextPositionData;
+      this.motionAData = nextMotionAData;
+      this.motionBData = nextMotionBData;
+      this.motionCData = nextMotionCData;
+      this.randomData = nextRandomData;
+      this.computeBindGroup = createComputeBindGroup(this.device, this.computePipeline, nextResources, this.paramsBuffer, this.appleBuffer, this.appleEaterBuffer);
+
+      previousResources.positionBuffer.destroy();
+      previousResources.motionABuffer.destroy();
+      previousResources.motionBBuffer.destroy();
+      previousResources.motionCBuffer.destroy();
+      previousResources.randomBuffer.destroy();
+      previousResources.vertexBuffer.destroy();
     },
     clear() {
       const encoder = this.device.createCommandEncoder();
@@ -660,17 +676,30 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
 }
 
 export async function getWebgpuWormLimit() {
+  const { device } = await getWebgpuContext();
+  return getMaxSupportedWormCount(device);
+}
+
+async function getWebgpuContext() {
+  if (webgpuContextPromise !== null) {
+    return webgpuContextPromise;
+  }
+
   if (!("gpu" in navigator)) {
     throw new Error("WebGPU unavailable in this browser.");
   }
 
-  const adapter = await navigator.gpu.requestAdapter();
-  if (adapter === null) {
-    throw new Error("WebGPU adapter unavailable.");
-  }
+  webgpuContextPromise = navigator.gpu.requestAdapter().then(async (adapter) => {
+    if (adapter === null) {
+      throw new Error("WebGPU adapter unavailable.");
+    }
 
-  const device = await adapter.requestDevice();
-  return getMaxSupportedWormCount(device);
+    return {
+      adapter,
+      device: await adapter.requestDevice()
+    };
+  });
+  return webgpuContextPromise;
 }
 
 function createStorageBuffer(device, data) {
@@ -680,6 +709,64 @@ function createStorageBuffer(device, data) {
   });
   device.queue.writeBuffer(buffer, 0, data);
   return buffer;
+}
+
+function createWormResources(device, capacityWormCount) {
+  return {
+    positionBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
+    motionABuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
+    motionBBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
+    motionCBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
+    randomBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_RANDOM_STATE),
+    vertexBuffer: device.createBuffer({
+      size: capacityWormCount * VERTICES_PER_WORM * COMPUTE_VERTEX_STRIDE,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+    })
+  };
+}
+
+function createWormResourcesFromData(device, capacityWormCount, positionData, motionAData, motionBData, motionCData, randomData) {
+  return {
+    positionBuffer: createStorageBuffer(device, positionData),
+    motionABuffer: createStorageBuffer(device, motionAData),
+    motionBBuffer: createStorageBuffer(device, motionBData),
+    motionCBuffer: createStorageBuffer(device, motionCData),
+    randomBuffer: createStorageBuffer(device, randomData),
+    vertexBuffer: device.createBuffer({
+      size: capacityWormCount * VERTICES_PER_WORM * COMPUTE_VERTEX_STRIDE,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+    })
+  };
+}
+
+function createEmptyStorageBuffer(device, size) {
+  return device.createBuffer({
+    size,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+}
+
+function createComputeBindGroup(device, computePipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer) {
+  return device.createBindGroup({
+    layout: computePipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: wormResources.positionBuffer } },
+      { binding: 1, resource: { buffer: wormResources.motionABuffer } },
+      { binding: 2, resource: { buffer: wormResources.motionBBuffer } },
+      { binding: 3, resource: { buffer: wormResources.motionCBuffer } },
+      { binding: 4, resource: { buffer: wormResources.randomBuffer } },
+      { binding: 5, resource: { buffer: wormResources.vertexBuffer } },
+      { binding: 6, resource: { buffer: paramsBuffer } },
+      { binding: 7, resource: { buffer: appleBuffer } },
+      { binding: 8, resource: { buffer: appleEaterBuffer } }
+    ]
+  });
+}
+
+function copyWormBufferRange(encoder, sourceBuffer, destinationBuffer, byteLength) {
+  if (byteLength > 0) {
+    encoder.copyBufferToBuffer(sourceBuffer, 0, destinationBuffer, 0, byteLength);
+  }
 }
 
 function getMaxSupportedWormCount(gpuLimitsSource, computeVertexStride = 32) {
