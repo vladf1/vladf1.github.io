@@ -10,9 +10,9 @@ const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
 const WORM_MAX_RANDOM_ANGLE_CHANGE = 1.5;
 const APPLE_MAX_RADIUS = 62;
 const APPLE_MIN_ACTIVE_RADIUS = 15;
-const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
 const FLOATS_PER_APPLE = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
+const FLOATS_PER_PREVIEW = 4;
 const APPLE_RADIUS_SEGMENTS = 96;
 const VERTICES_PER_APPLE_MARKER = 16 + APPLE_RADIUS_SEGMENTS * 2;
 const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
@@ -89,7 +89,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   const appleFreeSlotData = new Uint32Array(MAX_APPLES);
   const appleFreeCountData = new Uint32Array([MAX_APPLES]);
   const applePlacementData = new Float32Array(MAX_APPLE_PLACEMENTS_PER_FRAME * FLOATS_PER_APPLE);
-  const applePreviewData = new Float32Array(VERTICES_PER_PREVIEW_MARKER * FLOATS_PER_MARKER_VERTEX);
+  const applePreviewData = new Float32Array(FLOATS_PER_PREVIEW);
 
   for (let index = 0; index < MAX_APPLES; index++) {
     appleFreeSlotData[index] = MAX_APPLES - 1 - index;
@@ -134,50 +134,21 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       entryPoint: "placementMain"
     }
   });
-  const linePipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      module: lineShader,
-      entryPoint: "vertexMain",
-      buffers: [{
-        arrayStride: COMPUTE_VERTEX_STRIDE,
-        attributes: [
-          {
-            shaderLocation: 0,
-            offset: 0,
-            format: "float32x2"
-          },
-          {
-            shaderLocation: 1,
-            offset: 16,
-            format: "float32x4"
-          }
-        ]
-      }]
-    },
-    fragment: {
-      module: lineShader,
-      entryPoint: "fragmentMain",
-      targets: [{
-        format,
-        blend: {
-          color: {
-            srcFactor: "src-alpha",
-            dstFactor: "one-minus-src-alpha",
-            operation: "add"
-          },
-          alpha: {
-            srcFactor: "one",
-            dstFactor: "one-minus-src-alpha",
-            operation: "add"
-          }
-        }
-      }]
-    },
-    primitive: {
-      topology: "line-list"
-    }
-  });
+  const linePipeline = createLinePipeline(device, format, lineShader, "vertexMain", [{
+    arrayStride: COMPUTE_VERTEX_STRIDE,
+    attributes: [
+      {
+        shaderLocation: 0,
+        offset: 0,
+        format: "float32x2"
+      },
+      {
+        shaderLocation: 1,
+        offset: 16,
+        format: "float32x4"
+      }
+    ]
+  }]);
   const fadePipeline = device.createRenderPipeline({
     layout: "auto",
     vertex: {
@@ -207,6 +178,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       topology: "triangle-list"
     }
   });
+  const previewPipeline = createLinePipeline(device, format, lineShader, "previewVertexMain");
   const appleBuffer = device.createBuffer({
     size: appleData.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
@@ -231,7 +203,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
   });
   const applePreviewBuffer = device.createBuffer({
     size: applePreviewData.byteLength,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
   const paramsBuffer = device.createBuffer({
     size: 64,
@@ -284,6 +256,19 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       resource: { buffer: fadeBuffer }
     }]
   });
+  const previewBindGroup = device.createBindGroup({
+    layout: previewPipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: resolutionBuffer }
+      },
+      {
+        binding: 1,
+        resource: { buffer: applePreviewBuffer }
+      }
+    ]
+  });
   const renderer = {
     canvas,
     context,
@@ -301,12 +286,14 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     applePlacementPipeline,
     linePipeline,
     fadePipeline,
+    previewPipeline,
     computeBindGroup,
     initBindGroup,
     appleBindGroup,
     applePlacementBindGroup,
     lineBindGroup,
     fadeBindGroup,
+    previewBindGroup,
     vertexBuffer: wormResources.vertexBuffer,
     positionBuffer: wormResources.positionBuffer,
     motionABuffer: wormResources.motionABuffer,
@@ -330,7 +317,6 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
     applePreviewData,
     appleSlotCount: MAX_APPLES,
     applePlacementCount: 0,
-    applePreviewVertexCount: 0,
     applePreviewVisible: false,
     appleSnapshotPending: false,
     appleSnapshotHandler: null,
@@ -628,42 +614,12 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
       pass.end();
     },
     setApplePreview(x, y, visible) {
-      if (!visible) {
-        this.applePreviewVisible = false;
-        this.applePreviewVertexCount = 0;
-        return;
-      }
-
-      this.applePreviewData.fill(0);
-      let markerIndex = 0;
-      markerIndex = writeCircleVertices(
-        this.applePreviewData,
-        markerIndex,
-        x,
-        y,
-        APPLE_MAX_RADIUS * APPLE_GRAVITY_RADIUS_SCALE,
-        1,
-        0.9,
-        0.15,
-        0.16
-      );
-      markerIndex = writeCircleVertices(
-        this.applePreviewData,
-        markerIndex,
-        x,
-        y,
-        APPLE_MAX_RADIUS,
-        1,
-        0.12,
-        0.22,
-        0.62
-      );
-      this.applePreviewVisible = true;
-      this.applePreviewVertexCount = markerIndex / FLOATS_PER_MARKER_VERTEX;
+      this.applePreviewVisible = visible;
+      this.applePreviewData.set([x, y, visible ? 1 : 0, 0]);
       this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
     },
     drawApplePreview(encoder, targetView) {
-      if (!this.applePreviewVisible || this.applePreviewVertexCount === 0) {
+      if (!this.applePreviewVisible) {
         return;
       }
 
@@ -674,10 +630,9 @@ export async function createWebgpuComputeRenderer(canvas, width, height, wormCou
           storeOp: "store"
         }]
       });
-      pass.setPipeline(this.linePipeline);
-      pass.setBindGroup(0, this.lineBindGroup);
-      pass.setVertexBuffer(0, this.applePreviewBuffer);
-      pass.draw(this.applePreviewVertexCount);
+      pass.setPipeline(this.previewPipeline);
+      pass.setBindGroup(0, this.previewBindGroup);
+      pass.draw(VERTICES_PER_PREVIEW_MARKER);
       pass.end();
     },
     readApples() {
@@ -733,6 +688,39 @@ function createStorageBuffer(device, data) {
   });
   device.queue.writeBuffer(buffer, 0, data);
   return buffer;
+}
+
+function createLinePipeline(device, format, shader, vertexEntryPoint, buffers = []) {
+  return device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: shader,
+      entryPoint: vertexEntryPoint,
+      buffers
+    },
+    fragment: {
+      module: shader,
+      entryPoint: "fragmentMain",
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: "src-alpha",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          },
+          alpha: {
+            srcFactor: "one",
+            dstFactor: "one-minus-src-alpha",
+            operation: "add"
+          }
+        }
+      }]
+    },
+    primitive: {
+      topology: "line-list"
+    }
+  });
 }
 
 function createWormResources(device, capacityWormCount) {
@@ -805,44 +793,4 @@ function getWormCapacity(wormCount, maxSupportedWormCount) {
     maxSupportedWormCount,
     Math.ceil(wormCount / WORM_CAPACITY_BUCKET_SIZE) * WORM_CAPACITY_BUCKET_SIZE
   );
-}
-
-function writeCircleVertices(vertices, index, centerX, centerY, radius, red, green, blue, alpha) {
-  for (let segment = 0; segment < APPLE_RADIUS_SEGMENTS; segment++) {
-    const startAngle = segment / APPLE_RADIUS_SEGMENTS * Math.PI * 2;
-    const endAngle = (segment + 1) / APPLE_RADIUS_SEGMENTS * Math.PI * 2;
-    index = writeMarkerVertex(
-      vertices,
-      index,
-      centerX + Math.cos(startAngle) * radius,
-      centerY + Math.sin(startAngle) * radius,
-      red,
-      green,
-      blue,
-      alpha
-    );
-    index = writeMarkerVertex(
-      vertices,
-      index,
-      centerX + Math.cos(endAngle) * radius,
-      centerY + Math.sin(endAngle) * radius,
-      red,
-      green,
-      blue,
-      alpha
-    );
-  }
-  return index;
-}
-
-function writeMarkerVertex(vertices, index, x, y, red, green, blue, alpha) {
-  vertices[index++] = x;
-  vertices[index++] = y;
-  vertices[index++] = 0;
-  vertices[index++] = 0;
-  vertices[index++] = red;
-  vertices[index++] = green;
-  vertices[index++] = blue;
-  vertices[index++] = alpha;
-  return index;
 }
