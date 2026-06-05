@@ -249,65 +249,65 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       }
     ]
   });
-  const renderer: any = {
-    canvas,
-    context,
-    device,
-    format,
-    width: 0,
-    height: 0,
-    wormCount,
-    capacityWormCount,
-    maxSupportedWormCount,
-    wormResources,
-    updateWormStateAndWriteLineVerticesPipeline,
-    initializeWormStateRangePipeline,
-    updateAppleStateAndWriteAppleShapeVerticesPipeline,
-    placeQueuedApplesPipeline,
-    drawBufferedLineVerticesPipeline,
-    fadeTrailImagePipeline,
-    drawApplePreviewRingsPipeline,
-    computeBindGroup,
-    initBindGroup,
-    appleBindGroup,
-    applePlacementBindGroup,
-    lineBindGroup,
-    fadeBindGroup,
-    previewBindGroup,
-    vertexBuffer: wormResources.vertexBuffer,
-    positionBuffer: wormResources.positionBuffer,
-    motionABuffer: wormResources.motionABuffer,
-    motionBBuffer: wormResources.motionBBuffer,
-    motionCBuffer: wormResources.motionCBuffer,
-    randomBuffer: wormResources.randomBuffer,
-    appleBuffer,
-    appleEaterBuffer,
-    appleFreeSlotBuffer,
-    appleFreeCountBuffer,
-    applePlacementBuffer,
-    appleReadbackBuffer,
-    appleEaterClearData,
-    appleFreeSlotData,
-    appleFreeCountData,
-    appleVertexBuffer,
-    applePreviewBuffer,
-    appleData,
-    appleMarkerData,
-    applePlacementData,
-    applePreviewData,
-    appleSlotCount: MAX_APPLES,
-    applePlacementCount: 0,
-    applePreviewVisible: false,
-    appleSnapshotPending: false,
-    appleSnapshotHandler: null,
-    paramsBuffer,
-    resolutionBuffer,
-    fadeBuffer,
-    copyTrailImageToCanvasPipeline: presenter.pipeline,
-    presentSampler: presenter.sampler,
-    presentBindGroup: null,
-    trailTexture: null,
-    trailView: null,
+  const renderer = new class WebgpuComputeRenderer {
+    canvas = canvas;
+    context = context;
+    device = device;
+    format = format;
+    width = 0;
+    height = 0;
+    wormCount = wormCount;
+    capacityWormCount = capacityWormCount;
+    maxSupportedWormCount = maxSupportedWormCount;
+    wormResources = wormResources;
+    updateWormStateAndWriteLineVerticesPipeline = updateWormStateAndWriteLineVerticesPipeline;
+    initializeWormStateRangePipeline = initializeWormStateRangePipeline;
+    updateAppleStateAndWriteAppleShapeVerticesPipeline = updateAppleStateAndWriteAppleShapeVerticesPipeline;
+    placeQueuedApplesPipeline = placeQueuedApplesPipeline;
+    drawBufferedLineVerticesPipeline = drawBufferedLineVerticesPipeline;
+    fadeTrailImagePipeline = fadeTrailImagePipeline;
+    drawApplePreviewRingsPipeline = drawApplePreviewRingsPipeline;
+    computeBindGroup = computeBindGroup;
+    initBindGroup = initBindGroup;
+    appleBindGroup = appleBindGroup;
+    applePlacementBindGroup = applePlacementBindGroup;
+    lineBindGroup = lineBindGroup;
+    fadeBindGroup = fadeBindGroup;
+    previewBindGroup = previewBindGroup;
+    vertexBuffer = wormResources.vertexBuffer;
+    positionBuffer = wormResources.positionBuffer;
+    motionABuffer = wormResources.motionABuffer;
+    motionBBuffer = wormResources.motionBBuffer;
+    motionCBuffer = wormResources.motionCBuffer;
+    randomBuffer = wormResources.randomBuffer;
+    appleBuffer = appleBuffer;
+    appleEaterBuffer = appleEaterBuffer;
+    appleFreeSlotBuffer = appleFreeSlotBuffer;
+    appleFreeCountBuffer = appleFreeCountBuffer;
+    applePlacementBuffer = applePlacementBuffer;
+    appleReadbackBuffer = appleReadbackBuffer;
+    appleEaterClearData = appleEaterClearData;
+    appleFreeSlotData = appleFreeSlotData;
+    appleFreeCountData = appleFreeCountData;
+    appleVertexBuffer = appleVertexBuffer;
+    applePreviewBuffer = applePreviewBuffer;
+    appleData = appleData;
+    appleMarkerData = appleMarkerData;
+    applePlacementData = applePlacementData;
+    applePreviewData = applePreviewData;
+    appleSlotCount = MAX_APPLES;
+    applePlacementCount = 0;
+    applePreviewVisible = false;
+    appleSnapshotPending = false;
+    appleSnapshotHandler: ((snapshot: Float32Array) => void) | null = null;
+    paramsBuffer = paramsBuffer;
+    resolutionBuffer = resolutionBuffer;
+    fadeBuffer = fadeBuffer;
+    copyTrailImageToCanvasPipeline = presenter.pipeline;
+    presentSampler = presenter.sampler;
+    presentBindGroup!: GPUBindGroup;
+    trailTexture: GPUTexture | null = null;
+    trailView!: GPUTextureView;
 
     resize(nextWidth: number, nextHeight: number) {
       this.width = nextWidth;
@@ -322,7 +322,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
       this.createTrailTexture();
       this.clear();
-    },
+    }
 
     setWormCount(nextWormCount: number) {
       if (nextWormCount > this.maxSupportedWormCount) {
@@ -340,7 +340,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
 
       this.initWormRange(previousWormCount, nextWormCount);
       return true;
-    },
+    }
 
     growWormCapacity(nextWormCount: number) {
       const previousResources = this.wormResources;
@@ -371,7 +371,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       previousResources.motionCBuffer.destroy();
       previousResources.randomBuffer.destroy();
       previousResources.vertexBuffer.destroy();
-    },
+    }
 
     initWormRange(startIndex: number, endIndex: number) {
       if (startIndex >= endIndex) {
@@ -403,7 +403,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       initPass.dispatchWorkgroups(Math.ceil((endIndex - startIndex) / 256));
       initPass.end();
       this.device.queue.submit([encoder.finish()]);
-    },
+    }
 
     clear() {
       const encoder = this.device.createCommandEncoder();
@@ -418,7 +418,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       pass.end();
       this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
-    },
+    }
 
     drawFrame(elapsedMs: number, fadeAmount: number | null, appleBitePercentPerSecond: number) {
       const applePlacementCount = this.applePlacementCount;
@@ -512,7 +512,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       if (shouldReadApples) {
         this.readApples();
       }
-    },
+    }
 
     queueApplePlacement(x: number, y: number) {
       if (this.applePlacementCount >= MAX_APPLE_PLACEMENTS_PER_FRAME) {
@@ -527,7 +527,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       ], this.applePlacementCount * FLOATS_PER_APPLE);
       this.applePlacementCount++;
       return true;
-    },
+    }
 
     resetApples() {
       this.appleData.fill(0);
@@ -542,14 +542,14 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       this.device.queue.writeBuffer(this.appleFreeSlotBuffer, 0, this.appleFreeSlotData);
       this.device.queue.writeBuffer(this.appleFreeCountBuffer, 0, this.appleFreeCountData);
       this.device.queue.writeBuffer(this.appleVertexBuffer, 0, this.appleMarkerData);
-    },
+    }
 
     requestAppleSnapshot(handler: (snapshot: Float32Array) => void) {
       if (this.appleSnapshotPending) {
         return;
       }
       this.appleSnapshotHandler = handler;
-    },
+    }
 
     createTrailTexture() {
       if (this.trailTexture !== null) {
@@ -574,7 +574,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
           }
         ]
       });
-    },
+    }
 
     presentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
       const view = targetView ?? this.context.getCurrentTexture().createView();
@@ -590,7 +590,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       pass.setBindGroup(0, this.presentBindGroup);
       pass.draw(6);
       pass.end();
-    },
+    }
 
     drawAppleOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
       const pass = encoder.beginRenderPass({
@@ -605,13 +605,13 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       pass.setVertexBuffer(0, this.appleVertexBuffer);
       pass.draw(this.appleSlotCount * VERTICES_PER_APPLE_MARKER);
       pass.end();
-    },
+    }
 
     setApplePreview(x: number, y: number, visible: boolean) {
       this.applePreviewVisible = visible;
       this.applePreviewData.set([x, y, visible ? 1 : 0, 0]);
       this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
-    },
+    }
 
     drawApplePreview(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
       if (!this.applePreviewVisible) {
@@ -629,7 +629,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       pass.setBindGroup(0, this.previewBindGroup);
       pass.draw(VERTICES_PER_PREVIEW_MARKER);
       pass.end();
-    },
+    }
 
     readApples() {
       this.appleSnapshotPending = true;
@@ -644,12 +644,12 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         this.appleSnapshotPending = false;
         this.appleSnapshotHandler = null;
       });
-    },
+    }
 
     finish() {
       return this.device.queue.onSubmittedWorkDone();
     }
-  };
+  }();
 
   renderer.resize(width, height);
   renderer.initWormRange(0, wormCount);
