@@ -46,6 +46,7 @@ jobs:
             --exclude='old-projects/*-silverlight-port/assets/'
           cp -R old-projects/fireworks-silverlight-port/dist/. _site/old-projects/fireworks-silverlight-port/
           cp -R old-projects/swarm-silverlight-port/dist/. _site/old-projects/swarm-silverlight-port/
+          cp -R old-projects/swarm-3/dist/. _site/old-projects/swarm-3/
           cp -R old-projects/vector-defence-silverlight-port/dist/. _site/old-projects/vector-defence-silverlight-port/
           touch _site/.nojekyll
 

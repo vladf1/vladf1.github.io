@@ -242,9 +242,8 @@
     <script>
       if (location.protocol === "http:" && !["localhost", "127.0.0.1", "::1"].includes(location.hostname)) {
         location.replace(`https:${location.href.slice(location.protocol.length)}`);
-      } else {
-        import("./swarm-3.js");
       }
     </script>
+    <script type="module" src="./swarm-3.ts"></script>
   </body>
 </html>
