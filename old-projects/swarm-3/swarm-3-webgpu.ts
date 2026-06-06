@@ -86,34 +86,10 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
   const appleShader = device.createShaderModule({ code: appleShaderSource });
   const lineShader = device.createShaderModule({ code: lineShaderSource });
   const fadeShader = device.createShaderModule({ code: fadeShaderSource });
-  const updateWormStateAndWriteLineVerticesPipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: computeShader,
-      entryPoint: "computeMain"
-    }
-  });
-  const initializeWormStateRangePipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: computeShader,
-      entryPoint: "initMain"
-    }
-  });
-  const updateAppleStateAndWriteAppleShapeVerticesPipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: appleShader,
-      entryPoint: "computeMain"
-    }
-  });
-  const placeQueuedApplesPipeline = device.createComputePipeline({
-    layout: "auto",
-    compute: {
-      module: appleShader,
-      entryPoint: "placementMain"
-    }
-  });
+  const updateWormStateAndWriteLineVerticesPipeline = createComputePipeline(device, computeShader, "computeMain");
+  const initializeWormStateRangePipeline = createComputePipeline(device, computeShader, "initMain");
+  const updateAppleStateAndWriteAppleShapeVerticesPipeline = createComputePipeline(device, appleShader, "computeMain");
+  const placeQueuedApplesPipeline = createComputePipeline(device, appleShader, "placementMain");
   const drawBufferedLineVerticesPipeline = createLinePipeline(device, format, lineShader, "vertexMain", [{
     arrayStride: COMPUTE_VERTEX_STRIDE,
     attributes: [
@@ -407,14 +383,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
 
     clear() {
       const encoder = this.device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: this.trailView,
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-        }]
-      });
+      const pass = beginRenderPass(encoder, this.trailView, "clear");
       pass.end();
       this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
@@ -454,13 +423,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
       }
       const encoder = this.device.createCommandEncoder();
       if (fadeAmount !== null) {
-        const fadePass = encoder.beginRenderPass({
-          colorAttachments: [{
-            view: this.trailView,
-            loadOp: "load",
-            storeOp: "store"
-          }]
-        });
+        const fadePass = beginRenderPass(encoder, this.trailView);
         fadePass.setPipeline(this.fadeTrailImagePipeline);
         fadePass.setBindGroup(0, this.fadeBindGroup);
         fadePass.draw(6);
@@ -487,13 +450,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         placementPass.end();
       }
 
-      const linePass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: this.trailView,
-          loadOp: "load",
-          storeOp: "store"
-        }]
-      });
+      const linePass = beginRenderPass(encoder, this.trailView);
       linePass.setPipeline(this.drawBufferedLineVerticesPipeline);
       linePass.setBindGroup(0, this.lineBindGroup);
       linePass.setVertexBuffer(0, this.vertexBuffer);
@@ -578,14 +535,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
 
     presentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
       const view = targetView ?? this.context.getCurrentTexture().createView();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view,
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-        }]
-      });
+      const pass = beginRenderPass(encoder, view, "clear");
       pass.setPipeline(this.copyTrailImageToCanvasPipeline);
       pass.setBindGroup(0, this.presentBindGroup);
       pass.draw(6);
@@ -593,13 +543,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
     }
 
     drawAppleOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: targetView,
-          loadOp: "load",
-          storeOp: "store"
-        }]
-      });
+      const pass = beginRenderPass(encoder, targetView);
       pass.setPipeline(this.drawBufferedLineVerticesPipeline);
       pass.setBindGroup(0, this.lineBindGroup);
       pass.setVertexBuffer(0, this.appleVertexBuffer);
@@ -618,13 +562,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         return;
       }
 
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: targetView,
-          loadOp: "load",
-          storeOp: "store"
-        }]
-      });
+      const pass = beginRenderPass(encoder, targetView);
       pass.setPipeline(this.drawApplePreviewRingsPipeline);
       pass.setBindGroup(0, this.previewBindGroup);
       pass.draw(VERTICES_PER_PREVIEW_MARKER);
@@ -685,6 +623,30 @@ function createStorageBuffer(device: GPUDevice, data: BufferSource) {
   });
   device.queue.writeBuffer(buffer, 0, data);
   return buffer;
+}
+
+function createComputePipeline(device: GPUDevice, shader: GPUShaderModule, entryPoint: string) {
+  return device.createComputePipeline({
+    layout: "auto",
+    compute: {
+      module: shader,
+      entryPoint
+    }
+  });
+}
+
+function beginRenderPass(encoder: GPUCommandEncoder, view: GPUTextureView, loadOp: GPULoadOp = "load") {
+  const attachment: GPURenderPassColorAttachment = {
+    view,
+    loadOp,
+    storeOp: "store"
+  };
+  if (loadOp === "clear") {
+    attachment.clearValue = { r: 0, g: 0, b: 0, a: 1 };
+  }
+  return encoder.beginRenderPass({
+    colorAttachments: [attachment]
+  });
 }
 
 function createLinePipeline(
