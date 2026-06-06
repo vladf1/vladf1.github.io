@@ -3,7 +3,7 @@ import * as webgpu from "./swarm-3-webgpu";
 type WebgpuRenderer = Awaited<ReturnType<typeof webgpu.createWebgpuComputeRenderer>>;
 
 export async function startSwarmApp() {
-  let canvas = document.querySelector<HTMLCanvasElement>("#swarm")!;
+  const canvas = document.querySelector<HTMLCanvasElement>("#swarm")!;
   const stats = document.querySelector<HTMLDivElement>("#stats")!;
   const pauseButton = document.querySelector<HTMLButtonElement>("#pauseButton")!;
   const resetApplesButton = document.querySelector<HTMLButtonElement>("#resetApplesButton")!;
@@ -283,13 +283,9 @@ export async function startSwarmApp() {
     setPaused(!paused);
   }
 
-  addEventListener("resize", () => {
-    resize();
-  });
+  addEventListener("resize", resize);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", () => {
-      resize();
-    });
+    window.visualViewport.addEventListener("resize", resize);
   }
   addEventListener("keydown", handleKeyDown);
   canvas.addEventListener("pointermove", updateApplePreview);

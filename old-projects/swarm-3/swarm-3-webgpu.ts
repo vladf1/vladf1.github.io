@@ -157,72 +157,48 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
     size: appleMarkerData.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
-  const applePreviewBuffer = device.createBuffer({
-    size: applePreviewData.byteLength,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-  });
-  const paramsBuffer = device.createBuffer({
-    size: 64,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-  });
-  const resolutionBuffer = device.createBuffer({
-    size: 8,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-  });
-  const fadeBuffer = device.createBuffer({
-    size: 4,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-  });
+  const applePreviewBuffer = createUniformBuffer(device, applePreviewData.byteLength);
+  const paramsBuffer = createUniformBuffer(device, 64);
+  const resolutionBuffer = createUniformBuffer(device, 8);
+  const fadeBuffer = createUniformBuffer(device, 4);
   const presenter = createWebgpuPresenter(device, format, presentShaderSource);
   const computeBindGroup = createComputeBindGroup(device, updateWormStateAndWriteLineVerticesPipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer);
   const initBindGroup = createInitBindGroup(device, initializeWormStateRangePipeline, wormResources, paramsBuffer);
   const appleBindGroup = device.createBindGroup({
     layout: updateAppleStateAndWriteAppleShapeVerticesPipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: appleBuffer } },
-      { binding: 1, resource: { buffer: appleEaterBuffer } },
-      { binding: 2, resource: { buffer: appleVertexBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } },
-      { binding: 4, resource: { buffer: appleFreeSlotBuffer } },
-      { binding: 5, resource: { buffer: appleFreeCountBuffer } }
+      bufferBinding(0, appleBuffer),
+      bufferBinding(1, appleEaterBuffer),
+      bufferBinding(2, appleVertexBuffer),
+      bufferBinding(3, paramsBuffer),
+      bufferBinding(4, appleFreeSlotBuffer),
+      bufferBinding(5, appleFreeCountBuffer)
     ]
   });
   const applePlacementBindGroup = device.createBindGroup({
     layout: placeQueuedApplesPipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: appleBuffer } },
-      { binding: 2, resource: { buffer: appleVertexBuffer } },
-      { binding: 3, resource: { buffer: paramsBuffer } },
-      { binding: 4, resource: { buffer: appleFreeSlotBuffer } },
-      { binding: 5, resource: { buffer: appleFreeCountBuffer } },
-      { binding: 6, resource: { buffer: applePlacementBuffer } }
+      bufferBinding(0, appleBuffer),
+      bufferBinding(2, appleVertexBuffer),
+      bufferBinding(3, paramsBuffer),
+      bufferBinding(4, appleFreeSlotBuffer),
+      bufferBinding(5, appleFreeCountBuffer),
+      bufferBinding(6, applePlacementBuffer)
     ]
   });
   const lineBindGroup = device.createBindGroup({
     layout: drawBufferedLineVerticesPipeline.getBindGroupLayout(0),
-    entries: [{
-      binding: 0,
-      resource: { buffer: resolutionBuffer }
-    }]
+    entries: [bufferBinding(0, resolutionBuffer)]
   });
   const fadeBindGroup = device.createBindGroup({
     layout: fadeTrailImagePipeline.getBindGroupLayout(0),
-    entries: [{
-      binding: 0,
-      resource: { buffer: fadeBuffer }
-    }]
+    entries: [bufferBinding(0, fadeBuffer)]
   });
   const previewBindGroup = device.createBindGroup({
     layout: drawApplePreviewRingsPipeline.getBindGroupLayout(0),
     entries: [
-      {
-        binding: 0,
-        resource: { buffer: resolutionBuffer }
-      },
-      {
-        binding: 1,
-        resource: { buffer: applePreviewBuffer }
-      }
+      bufferBinding(0, resolutionBuffer),
+      bufferBinding(1, applePreviewBuffer)
     ]
   });
   const renderer = new class WebgpuComputeRenderer {
@@ -373,11 +349,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         0
       ]));
       const encoder = this.device.createCommandEncoder();
-      const initPass = encoder.beginComputePass();
-      initPass.setPipeline(this.initializeWormStateRangePipeline);
-      initPass.setBindGroup(0, this.initBindGroup);
-      initPass.dispatchWorkgroups(Math.ceil((endIndex - startIndex) / 256));
-      initPass.end();
+      runComputePass(encoder, this.initializeWormStateRangePipeline, this.initBindGroup, Math.ceil((endIndex - startIndex) / 256));
       this.device.queue.submit([encoder.finish()]);
     }
 
@@ -430,24 +402,11 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         fadePass.end();
       }
 
-      const computePass = encoder.beginComputePass();
-      computePass.setPipeline(this.updateWormStateAndWriteLineVerticesPipeline);
-      computePass.setBindGroup(0, this.computeBindGroup);
-      computePass.dispatchWorkgroups(Math.ceil(this.wormCount / 256));
-      computePass.end();
-
-      const applePass = encoder.beginComputePass();
-      applePass.setPipeline(this.updateAppleStateAndWriteAppleShapeVerticesPipeline);
-      applePass.setBindGroup(0, this.appleBindGroup);
-      applePass.dispatchWorkgroups(Math.ceil(this.appleSlotCount / 64));
-      applePass.end();
+      runComputePass(encoder, this.updateWormStateAndWriteLineVerticesPipeline, this.computeBindGroup, Math.ceil(this.wormCount / 256));
+      runComputePass(encoder, this.updateAppleStateAndWriteAppleShapeVerticesPipeline, this.appleBindGroup, Math.ceil(this.appleSlotCount / 64));
 
       if (applePlacementCount > 0) {
-        const placementPass = encoder.beginComputePass();
-        placementPass.setPipeline(this.placeQueuedApplesPipeline);
-        placementPass.setBindGroup(0, this.applePlacementBindGroup);
-        placementPass.dispatchWorkgroups(1);
-        placementPass.end();
+        runComputePass(encoder, this.placeQueuedApplesPipeline, this.applePlacementBindGroup, 1);
       }
 
       const linePass = beginRenderPass(encoder, this.trailView);
@@ -625,6 +584,17 @@ function createStorageBuffer(device: GPUDevice, data: BufferSource) {
   return buffer;
 }
 
+function createUniformBuffer(device: GPUDevice, size: number) {
+  return device.createBuffer({
+    size,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+}
+
+function bufferBinding(binding: number, buffer: GPUBuffer): GPUBindGroupEntry {
+  return { binding, resource: { buffer } };
+}
+
 function createComputePipeline(device: GPUDevice, shader: GPUShaderModule, entryPoint: string) {
   return device.createComputePipeline({
     layout: "auto",
@@ -633,6 +603,14 @@ function createComputePipeline(device: GPUDevice, shader: GPUShaderModule, entry
       entryPoint
     }
   });
+}
+
+function runComputePass(encoder: GPUCommandEncoder, pipeline: GPUComputePipeline, bindGroup: GPUBindGroup, workgroupCount: number) {
+  const pass = encoder.beginComputePass();
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup);
+  pass.dispatchWorkgroups(workgroupCount);
+  pass.end();
 }
 
 function beginRenderPass(encoder: GPUCommandEncoder, view: GPUTextureView, loadOp: GPULoadOp = "load") {
