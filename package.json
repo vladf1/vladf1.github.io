@@ -1,0 +1,21 @@
+{
+  "name": "vladf1.github.io",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:swarm-2": "vite --host 127.0.0.1 --open /rebuilds/swarm-2/",
+    "dev:swarm-3": "vite --host 127.0.0.1 --open /rebuilds/swarm-3/",
+    "dev:fireworks": "vite --host 127.0.0.1 --open /silverlight-ports/fireworks/",
+    "dev:swarm-port": "vite --host 127.0.0.1 --open /silverlight-ports/swarm/",
+    "dev:vector-defence": "vite --host 127.0.0.1 --open /silverlight-ports/vector-defence/",
+    "dev:swarm-3:https": "vite --host 0.0.0.0 --config vite.https.config.ts --open /rebuilds/swarm-3/",
+    "build": "tsc -p tsconfig.json && vite build"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.70",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

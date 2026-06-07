@@ -1,2 +1,30 @@
 .DS_Store
-old-projects/.certs/
+._*
+
+# Dependencies
+node_modules/
+
+# Local certificates
+.certs/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output
+dist/
+**/dist/
+dist-ssr/
+
+# Vite / TypeScript caches
+.vite/
+**/.vite/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*

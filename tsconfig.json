@@ -15,5 +15,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["*-silverlight-port/src", "swarm-3/*.ts"]
+  "include": ["silverlight-ports/*/src", "rebuilds/swarm-3/*.ts"]
 }
