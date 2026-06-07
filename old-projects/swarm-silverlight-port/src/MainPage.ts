@@ -33,6 +33,10 @@ export class MainPage {
   private sprites: Sprite[] | null = null;
   private height = 0;
   private width = 0;
+  private renderHeight = 0;
+  private renderWidth = 0;
+  private renderScaleX = 1;
+  private renderScaleY = 1;
   private bmp: ImageData | null = null;
   private mouseX = -1;
   private mouseY = -1;
@@ -110,7 +114,7 @@ export class MainPage {
       const fadeBy = 1 - reduceAlpha;
       GraphicUtils.FadeScreen(this.bmp.data, fadeBy);
       for (const s of this.sprites) {
-        s.RenderPixels(this.height, this.width, this.bmp.data);
+        s.RenderPixels(this.renderHeight, this.renderWidth, this.bmp.data, this.renderScaleX, this.renderScaleY);
       }
       this.context.putImageData(this.bmp, 0, 0);
     }
@@ -138,13 +142,20 @@ export class MainPage {
   };
 
   private UserControl_SizeChanged = (): void => {
-    this.height = Math.max(1, Math.floor(window.innerHeight));
-    this.width = Math.max(1, Math.floor(window.innerWidth));
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
+    const rect = this.canvas.getBoundingClientRect();
+    this.height = Math.max(1, Math.floor(rect.height));
+    this.width = Math.max(1, Math.floor(rect.width));
+    const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    this.renderWidth = Math.max(1, Math.round(this.width * pixelRatio));
+    this.renderHeight = Math.max(1, Math.round(this.height * pixelRatio));
+    this.renderScaleX = this.renderWidth / this.width;
+    this.renderScaleY = this.renderHeight / this.height;
+    this.canvas.width = this.renderWidth;
+    this.canvas.height = this.renderHeight;
+    this.context.setTransform(this.renderScaleX, 0, 0, this.renderScaleY, 0, 0);
     this.context.fillStyle = "black";
     this.context.fillRect(0, 0, this.width, this.height);
-    this.bmp = this.context.createImageData(this.width, this.height);
+    this.bmp = this.context.createImageData(this.renderWidth, this.renderHeight);
     this.prepareBitmapAlpha();
 
     if (this.sprites === null) {
@@ -325,7 +336,7 @@ export class MainPage {
   private resetDrawingSurface(): void {
     this.context.fillStyle = "black";
     this.context.fillRect(0, 0, this.width, this.height);
-    this.bmp = this.context.createImageData(this.width, this.height);
+    this.bmp = this.context.createImageData(this.renderWidth, this.renderHeight);
     this.prepareBitmapAlpha();
     this.lastAnimated = 0;
     this.lastTimed = performance.now();

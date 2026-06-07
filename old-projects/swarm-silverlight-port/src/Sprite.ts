@@ -133,11 +133,11 @@ export class Sprite {
     this.SavePosition();
   }
 
-  public RenderPixels(height: number, width: number, pixels: Uint8ClampedArray): void {
-    const ix = Math.trunc(this.x);
-    const iy = Math.trunc(this.y);
-    const ox = Math.trunc(this.oldX);
-    const oy = Math.trunc(this.oldY);
+  public RenderPixels(height: number, width: number, pixels: Uint8ClampedArray, scaleX = 1, scaleY = 1): void {
+    const ix = Math.round(this.x * scaleX);
+    const iy = Math.round(this.y * scaleY);
+    const ox = Math.round(this.oldX * scaleX);
+    const oy = Math.round(this.oldY * scaleY);
     const color = this.RepelMode ? Sprite.whiteIntColor : this.normalIntColor;
     GraphicUtils.DrawLine(pixels, width, height, ix, iy, ox, oy, color);
 
