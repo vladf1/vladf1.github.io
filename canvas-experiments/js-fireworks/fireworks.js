@@ -1,37 +1,15 @@
-﻿window.performance = window.performance || {};
-var initialTime = Date.now();
-if (!performance.now) {
-    performance.now = function () {
-        return Date.now() - initialTime;
-    };
-}
-
-var FrameCounter = {
-    additionalInfoCallback: null,
-    frames: 0,
-    tick: function () {
-        var statusBarElement = document.getElementById("statusBar");
-        statusBarElement.innerHTML = FrameCounter.frames + " fps, " + FrameCounter.additionalInfoCallback();
-        FrameCounter.frames = 0;
-    },
-    startTimer: function () {
-        setInterval(FrameCounter.tick, 1000);
-    }
-};
+﻿import {
+    FrameCounter,
+    randomInRange,
+    randomIntInRange,
+} from "../shared/common.js";
 
 var GRAVITY = 90, MIN_EXPLOSION_PARTS = 10, MAX_EXPLOSION_PARTS = 30, TIME_BETWEEN_FRAMES = 0, MIN_COLOR = 60,
     MAX_VELOCITY = 7, COLOR_RANGE = 20, MAX_COLOR = 255 - COLOR_RANGE, AIR_RESISTANCE_PER_SECOND = .95,
     sprites = [], ctx, canvasHeight, canvasWidth;
 
 var lastAnimated = 0;
-
-function randomInRange(minVal, maxVal) {
-    return minVal + (Math.random() * (maxVal - minVal));
-}
-
-function randomIntInRange(minVal, maxVal) {
-    return parseInt(randomInRange(minVal, maxVal));
-}
+var frameCounter;
 
 function Sprite(x, y) {
     this.x = x;
@@ -157,7 +135,7 @@ function renderFrame(now) {
         }
     }
     sprites = replacedSprites;
-    FrameCounter.frames++;
+    frameCounter.frameRendered();
 
     requestAnimationFrame(renderFrame);
 }
@@ -192,10 +170,10 @@ window.onload = function () {
         setTimeout(randomFire, randomInRange(500, 2000));
     })();
 
-    FrameCounter.additionalInfoCallback = function () {
-        return sprites.length + " sprites, " + canvasWidth + "x" + canvasHeight;
-    };
-    FrameCounter.startTimer();
+    var statusBarElement = document.getElementById("statusBar");
+    frameCounter = new FrameCounter(function (frames) {
+        statusBarElement.innerHTML = frames + " fps, " + sprites.length + " sprites, " + canvasWidth + "x" + canvasHeight;
+    });
 
     requestAnimationFrame(renderFrame);
 };

@@ -1,41 +1,25 @@
-import { FrameCounter } from "../shared/frame-counter.js";
+import {
+    FrameCounter,
+    TWO_PI,
+    isOutsideDistance,
+    randomInRange,
+} from "../shared/common.js";
 
 class Ball {
     static maxVelocity = 0.5;
-    static twoPi = Math.PI * 2;
 
     constructor(originalX, originalY, originalRadius) {
-        this.angle = this.getRandomValueInRange(0, Ball.twoPi);
+        this.angle = randomInRange(0, TWO_PI);
         this.dx = Ball.maxVelocity * Math.cos(this.angle);
         this.dy = Ball.maxVelocity * Math.sin(this.angle);
         this.x = originalX;
         this.y = originalY;
         this.radius = originalRadius;
 
-        const r = Math.floor(this.getRandomValueInRange(10, 255));
-        const g = Math.floor(this.getRandomValueInRange(10, 255));
-        const b = Math.floor(this.getRandomValueInRange(10, 255));
+        const r = Math.floor(randomInRange(10, 255));
+        const g = Math.floor(randomInRange(10, 255));
+        const b = Math.floor(randomInRange(10, 255));
         this.fillStyle = `rgb(${r},${g},${b})`;
-    }
-
-    getRandomValueInRange(minVal, maxVal) {
-        return minVal + Math.random() * (maxVal - minVal);
-    }
-
-    isOutsideDistance(x2, y2, dist) {
-        const xdif = Math.abs(this.x - x2);
-        if (dist <= xdif) {
-            return true;
-        }
-
-        const ydif = Math.abs(this.y - y2);
-        if (dist <= ydif) {
-            return true;
-        }
-
-        const sumOfSquares = xdif ** 2 + ydif ** 2;
-        const sqrDist = dist ** 2;
-        return sqrDist <= sumOfSquares;
     }
 
     checkForCollisionsWithOtherBalls(balls) {
@@ -74,7 +58,7 @@ class Ball {
 
     isCollided(x, y, otherObjectRadius) {
         const distance = this.radius + otherObjectRadius;
-        return !this.isOutsideDistance(x, y, distance);
+        return !isOutsideDistance(this.x, this.y, x, y, distance);
     }
 
     calculateNewPosition(millisecondsSinceLastRender, canvasWidth, canvasHeight) {
@@ -108,7 +92,7 @@ class Ball {
     draw(context) {
         context.fillStyle = this.fillStyle;
         context.beginPath();
-        context.arc(this.x, this.y, this.radius, 0, Ball.twoPi, false);
+        context.arc(this.x, this.y, this.radius, 0, TWO_PI, false);
         context.closePath();
         context.fill();
     }
@@ -145,16 +129,12 @@ class Scene {
         }
     }
 
-    getRandomValueInRange(minVal, maxVal) {
-        return minVal + Math.random() * (maxVal - minVal);
-    }
-
     tryToCreateBallInEmptySpace() {
         for (let attempt = 0; attempt < 50; attempt++) {
-            const radius = this.getRandomValueInRange(15, 45);
+            const radius = randomInRange(15, 45);
             const margin = radius + 10;
-            const startPosX = this.getRandomValueInRange(margin, this.width - margin);
-            const startPosY = this.getRandomValueInRange(margin, this.height - margin);
+            const startPosX = randomInRange(margin, this.width - margin);
+            const startPosY = randomInRange(margin, this.height - margin);
 
             const collidedWithExistingBall = this.balls.some((otherBubble) => {
                 return otherBubble.isCollided(startPosX, startPosY, radius);

@@ -1,4 +1,8 @@
-import { FrameCounter } from "../shared/frame-counter.js";
+import {
+    FrameCounter,
+    TWO_PI,
+    randomInRange,
+} from "../shared/common.js";
 
 /*
 Shot them up game
@@ -15,7 +19,7 @@ var config = {
     enableEpilepsy: false,
     enableParticles: true
 };
-var twoPi = Math.PI * 2;
+var twoPi = TWO_PI;
 var sprites = new Array();
 var shotsFired = 0;
 var shipsKilled = 0;
@@ -77,11 +81,6 @@ var getNow = window.performance && window.performance.now ? function () { return
         });
     };
 })(jQuery));
-function randomInRange(minVal, maxVal) {
-    if (minVal === maxVal)
-        return minVal;
-    return minVal + (Math.random() * (maxVal - minVal));
-}
 // t: current time, b: begInnIng value, c: change In value, d: duration
 var easeOutCubic = function (x, t, b, c, d) { return (c * ((t = t / d - 1) * t * t + 1) + b); };
 var Sprite = (function () {
