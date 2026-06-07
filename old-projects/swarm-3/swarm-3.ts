@@ -28,6 +28,8 @@ export async function startSwarmApp() {
   const fadeAmountPerMs = webgpu.DEFAULT_FADE_AMOUNT * webgpu.FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
+  let canvasRenderWidth = 0;
+  let canvasRenderHeight = 0;
   let renderer: WebgpuRenderer | null = null;
   let rendererReady = false;
   let rendererStatus = "Loading WebGPU...";
@@ -47,9 +49,12 @@ export async function startSwarmApp() {
     const rect = canvas.getBoundingClientRect();
     canvasWidth = Math.max(1, Math.floor(rect.width));
     canvasHeight = Math.max(1, Math.floor(rect.height));
+    const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    canvasRenderWidth = Math.max(1, Math.round(canvasWidth * pixelRatio));
+    canvasRenderHeight = Math.max(1, Math.round(canvasHeight * pixelRatio));
 
     if (rendererReady && renderer !== null) {
-      renderer.resize(canvasWidth, canvasHeight);
+      renderer.resize(canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight);
       return;
     }
     resetDrawingSurface();
@@ -143,7 +148,7 @@ export async function startSwarmApp() {
     renderer = null;
     try {
       renderer = await Promise.race([
-        webgpu.createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, wormCount),
+        webgpu.createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight, wormCount),
         new Promise<never>((_resolve, reject) => {
           setTimeout(() => reject(new Error("WebGPU initialization timed out")), 4000);
         })

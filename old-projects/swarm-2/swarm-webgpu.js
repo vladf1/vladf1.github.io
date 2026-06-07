@@ -41,7 +41,15 @@ function createWebgpuTrailTexture(device, format, width, height) {
   };
 }
 
-export async function createWebgpuComputeRenderer(canvas, width, height, sprites, motionState) {
+export async function createWebgpuComputeRenderer(
+  canvas,
+  width,
+  height,
+  renderWidth = width,
+  renderHeight = height,
+  sprites,
+  motionState
+) {
   if (!("gpu" in navigator)) {
     return null;
   }
@@ -226,6 +234,8 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     format,
     width: 0,
     height: 0,
+    renderWidth: 0,
+    renderHeight: 0,
     spriteCount,
     motionState,
     computePipeline,
@@ -243,11 +253,13 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
     presentBindGroup: null,
     trailTexture: null,
     trailView: null,
-    resize(nextWidth, nextHeight) {
+    resize(nextWidth, nextHeight, nextRenderWidth = nextWidth, nextRenderHeight = nextHeight) {
       this.width = nextWidth;
       this.height = nextHeight;
-      this.canvas.width = nextWidth;
-      this.canvas.height = nextHeight;
+      this.renderWidth = nextRenderWidth;
+      this.renderHeight = nextRenderHeight;
+      this.canvas.width = nextRenderWidth;
+      this.canvas.height = nextRenderHeight;
       this.context.configure({
         device: this.device,
         format: this.format,
@@ -337,7 +349,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
       if (this.trailTexture !== null) {
         this.trailTexture.destroy();
       }
-      const trail = createWebgpuTrailTexture(this.device, this.format, this.width, this.height);
+      const trail = createWebgpuTrailTexture(this.device, this.format, this.renderWidth, this.renderHeight);
       this.trailTexture = trail.texture;
       this.trailView = trail.view;
       this.presentBindGroup = this.device.createBindGroup({
@@ -374,7 +386,7 @@ export async function createWebgpuComputeRenderer(canvas, width, height, sprites
   };
 
   setSpriteInteractionDistances(width, height);
-  renderer.resize(width, height);
+  renderer.resize(width, height, renderWidth, renderHeight);
   return renderer;
 }
 

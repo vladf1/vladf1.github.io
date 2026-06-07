@@ -60,7 +60,14 @@ function createWebgpuPresenter(device: GPUDevice, format: GPUTextureFormat, shad
   };
 }
 
-export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, width: number, height: number, wormCount: number) {
+export async function createWebgpuComputeRenderer(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  renderWidth: number,
+  renderHeight: number,
+  wormCount: number
+) {
   const { device } = await getWebgpuContext();
   const context = canvas.getContext("webgpu")!;
   const format = navigator.gpu.getPreferredCanvasFormat();
@@ -208,6 +215,8 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
     format = format;
     width = 0;
     height = 0;
+    renderWidth = 0;
+    renderHeight = 0;
     wormCount = wormCount;
     capacityWormCount = capacityWormCount;
     maxSupportedWormCount = maxSupportedWormCount;
@@ -261,11 +270,13 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
     trailTexture: GPUTexture | null = null;
     trailView!: GPUTextureView;
 
-    resize(nextWidth: number, nextHeight: number) {
+    resize(nextWidth: number, nextHeight: number, nextRenderWidth: number, nextRenderHeight: number) {
       this.width = nextWidth;
       this.height = nextHeight;
-      this.canvas.width = nextWidth;
-      this.canvas.height = nextHeight;
+      this.renderWidth = nextRenderWidth;
+      this.renderHeight = nextRenderHeight;
+      this.canvas.width = nextRenderWidth;
+      this.canvas.height = nextRenderHeight;
       this.context.configure({
         device: this.device,
         format: this.format,
@@ -472,7 +483,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
         this.trailTexture.destroy();
       }
       this.trailTexture = this.device.createTexture({
-        size: [this.width, this.height],
+        size: [this.renderWidth, this.renderHeight],
         format: this.format,
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
       });
@@ -548,7 +559,7 @@ export async function createWebgpuComputeRenderer(canvas: HTMLCanvasElement, wid
     }
   }();
 
-  renderer.resize(width, height);
+  renderer.resize(width, height, renderWidth, renderHeight);
   renderer.initWormRange(0, wormCount);
   return renderer;
 }

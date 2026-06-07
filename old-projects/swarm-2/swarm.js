@@ -42,6 +42,8 @@ export async function startSwarmApp() {
   const fadeAmountPerMs = DEFAULT_FADE_AMOUNT * FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
+  let canvasRenderWidth = 0;
+  let canvasRenderHeight = 0;
   let renderer = null;
   let rendererReady = false;
   let rendererGeneration = 0;
@@ -69,6 +71,9 @@ export async function startSwarmApp() {
     const rect = canvas.getBoundingClientRect();
     canvasWidth = Math.max(1, Math.floor(rect.width));
     canvasHeight = Math.max(1, Math.floor(rect.height));
+    const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    canvasRenderWidth = Math.max(1, Math.round(canvasWidth * pixelRatio));
+    canvasRenderHeight = Math.max(1, Math.round(canvasHeight * pixelRatio));
     motionState.width = canvasWidth;
     motionState.height = canvasHeight;
     setSpriteInteractionDistances(canvasWidth, canvasHeight);
@@ -204,12 +209,12 @@ export async function startSwarmApp() {
 
   async function createRendererForMode(mode) {
     if (mode === RendererMode.cpu) {
-      return createCpuRenderer(canvas, canvasWidth, canvasHeight);
+      return createCpuRenderer(canvas, canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight);
     }
     if (mode === RendererMode.webgpuCompute) {
-      return createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, sprites, motionState);
+      return createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight, sprites, motionState);
     }
-    return createWebglRenderer(canvas, canvasWidth, canvasHeight);
+    return createWebglRenderer(canvas, canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight);
   }
 
   function getRendererContextType(mode) {
