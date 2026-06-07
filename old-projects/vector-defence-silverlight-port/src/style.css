@@ -1,5 +1,7 @@
 html,
 body {
+  --page-padding: 16px;
+
   margin: 0;
   height: 100%;
   background: #101414;
@@ -8,7 +10,7 @@ body {
 body {
   box-sizing: border-box;
   min-height: 100%;
-  padding: 16px;
+  padding: var(--page-padding);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   place-items: center;
@@ -26,8 +28,7 @@ h1 {
 canvas {
   display: block;
   width: auto;
-  height: 100%;
-  max-width: 100%;
+  height: min(100%, calc((100vw - (var(--page-padding) * 2)) * 520 / 700));
   aspect-ratio: 700 / 520;
   image-rendering: auto;
   outline: 1px solid #2f4f4f;

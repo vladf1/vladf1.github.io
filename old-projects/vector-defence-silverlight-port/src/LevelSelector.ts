@@ -10,9 +10,13 @@ export class LevelSelector {
   private fading = false;
   private levelToOpen: LevelInfo | null = null;
 
-  constructor(private readonly handler: (level: LevelInfo) => void) {
-    const x = (700 - this.width) / 2;
-    let y = (520 - this.estimatedHeight) / 2 + 30;
+  constructor(
+    private readonly handler: (level: LevelInfo) => void,
+    private readonly canvasWidth: number,
+    private readonly canvasHeight: number,
+  ) {
+    const x = (this.canvasWidth - this.width) / 2;
+    let y = (this.canvasHeight - this.estimatedHeight) / 2 + 30;
     for (const level of LevelManager.levels) {
       this.buttons.push(new CanvasButton(x + 30, y, this.width - 60, 46, level.name, () => this.choose(level)));
       y += 61;
@@ -41,8 +45,8 @@ export class LevelSelector {
     if (!this.visible) {
       return;
     }
-    const x = (700 - this.width) / 2;
-    const y = (520 - this.estimatedHeight) / 2;
+    const x = (this.canvasWidth - this.width) / 2;
+    const y = (this.canvasHeight - this.estimatedHeight) / 2;
     context.save();
     context.globalAlpha = this.opacity;
     context.fillStyle = "#000";

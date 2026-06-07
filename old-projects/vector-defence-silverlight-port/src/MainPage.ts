@@ -40,10 +40,12 @@ export class MainPage {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly context: CanvasRenderingContext2D,
+    private readonly logicalCanvasWidth: number,
+    private readonly logicalCanvasHeight: number,
   ) {
-    Game.canvasWidth = 700;
+    Game.canvasWidth = this.logicalCanvasWidth;
     Game.canvasHeight = 450;
-    this.levelSelector = new LevelSelector((level) => this.loadLevel(level));
+    this.levelSelector = new LevelSelector((level) => this.loadLevel(level), this.logicalCanvasWidth, this.logicalCanvasHeight);
     this.configureButtons();
     this.bindEvents();
 
@@ -58,7 +60,7 @@ export class MainPage {
   }
 
   private configureButtons(): void {
-    const towerX = (700 - 214) / 2;
+    const towerX = (this.logicalCanvasWidth - 214) / 2;
     const names: Array<[string, TowerBuildingMode]> = [
       ["Gun", TowerBuildingMode.GunTower],
       ["Laser", TowerBuildingMode.LaserTower],
@@ -75,7 +77,7 @@ export class MainPage {
       this.buttons.push(button);
     }
 
-    const actionX = (700 - 267) / 2;
+    const actionX = (this.logicalCanvasWidth - 267) / 2;
     this.buttons.push(new CanvasButton(actionX, 465, 100, 46, "sell", () => this.sellTower()));
     this.buttons.push(new CanvasButton(actionX + 110, 465, 157, 46, "upgrade", () => this.upgradeTower()));
     this.buttons.push(new CanvasButton(12, 465, 59, 46, "||", () => this.pauseButtonClick()));
@@ -376,17 +378,17 @@ export class MainPage {
   private getCanvasPoint(event: MouseEvent): Point {
     const rect = this.canvas.getBoundingClientRect();
     return new Point(
-      (event.clientX - rect.left) * (this.canvas.width / rect.width),
-      (event.clientY - rect.top) * (this.canvas.height / rect.height),
+      (event.clientX - rect.left) * (this.logicalCanvasWidth / rect.width),
+      (event.clientY - rect.top) * (this.logicalCanvasHeight / rect.height),
     );
   }
 
   private drawRootBackground(): void {
-    const gradient = this.context.createLinearGradient(0, 450, 0, 520);
+    const gradient = this.context.createLinearGradient(0, Game.canvasHeight, 0, this.logicalCanvasHeight);
     gradient.addColorStop(0, "#000");
     gradient.addColorStop(0.7, "#2f4f4f");
     this.context.fillStyle = gradient;
-    this.context.fillRect(0, 0, 700, 520);
+    this.context.fillRect(0, 0, this.logicalCanvasWidth, this.logicalCanvasHeight);
   }
 
   private updateOpacityAnimations(): void {
