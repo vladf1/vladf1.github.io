@@ -1,6 +1,12 @@
 import * as webgpu from "./swarm-3-webgpu";
 
 type WebgpuRenderer = Awaited<ReturnType<typeof webgpu.createWebgpuComputeRenderer>>;
+type AppleState = {
+  x: number;
+  y: number;
+  volume: number;
+  radius: number;
+};
 
 export async function startSwarmApp() {
   const canvas = document.querySelector<HTMLCanvasElement>("#swarm")!;
@@ -26,7 +32,7 @@ export async function startSwarmApp() {
   let rendererReady = false;
   let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
-  let appleVolumes: number[] = [];
+  let apples: AppleState[] = [];
   let lastAnimated = 0;
   let lastTimed = performance.now();
   let framesRendered = 0;
@@ -167,7 +173,7 @@ export async function startSwarmApp() {
       rendererStatus = `WebGPU device lost: ${info.message || info.reason}`;
       stats.textContent = rendererStatus;
     });
-    appleVolumes = [];
+    apples = [];
     updateAppleStatsText();
     lastAnimated = 0;
     lastTimed = performance.now();
@@ -194,12 +200,16 @@ export async function startSwarmApp() {
     lastApplePlantMs = now;
 
     const rect = canvas.getBoundingClientRect();
-    const { x, y } = canvasPointFromEvent(event, rect);
+    const { x, y } = clampAppleCenter(canvasPointFromEvent(event, rect));
     if (!rendererReady || renderer === null) {
       return;
     }
-    if (appleVolumes.length >= webgpu.MAX_APPLES) {
+    if (apples.length >= webgpu.MAX_APPLES) {
       showNotice(`Max apples reached (${webgpu.MAX_APPLES})`);
+      return;
+    }
+    if (overlapsExistingApple(x, y, webgpu.APPLE_MAX_RADIUS)) {
+      showNotice("Too close to another apple");
       return;
     }
 
@@ -208,7 +218,7 @@ export async function startSwarmApp() {
       return;
     }
 
-    appleVolumes.push(1);
+    apples.push({ x, y, volume: 1, radius: webgpu.APPLE_MAX_RADIUS });
     updateAppleStatsText();
     hint?.classList.add("is-fading");
     hint = null;
@@ -231,13 +241,13 @@ export async function startSwarmApp() {
   function resetApples(event?: Event) {
     event?.preventDefault();
     event?.stopPropagation();
-    appleVolumes = [];
+    apples = [];
     updateAppleStatsText();
     renderer?.resetApples();
   }
 
   function syncApplesFromGpu(snapshot: Float32Array) {
-    const nextAppleVolumes = [];
+    const nextApples = [];
     for (let index = 0; index < webgpu.MAX_APPLES; index++) {
       const offset = index * 4;
       const volume = snapshot[offset + 2] ?? 0;
@@ -245,14 +255,36 @@ export async function startSwarmApp() {
         continue;
       }
 
-      nextAppleVolumes.push(volume);
+      nextApples.push({
+        x: snapshot[offset] ?? 0,
+        y: snapshot[offset + 1] ?? 0,
+        volume,
+        radius: snapshot[offset + 3] ?? 0
+      });
     }
-    appleVolumes = nextAppleVolumes;
+    apples = nextApples;
     updateAppleStatsText();
   }
 
   function updateAppleStatsText() {
-    appleStats = appleVolumes.length === 0 ? "none" : appleVolumes.map(volume => `${Math.round(volume * 100)}%`).join(" ");
+    appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
+  }
+
+  function clampAppleCenter(point: { x: number; y: number }) {
+    const minCenter = webgpu.APPLE_MAX_RADIUS;
+    return {
+      x: Math.max(minCenter, Math.min(point.x, Math.max(canvasWidth - minCenter, minCenter))),
+      y: Math.max(minCenter, Math.min(point.y, Math.max(canvasHeight - minCenter, minCenter)))
+    };
+  }
+
+  function overlapsExistingApple(x: number, y: number, radius: number) {
+    return apples.some(apple => {
+      const minDistance = apple.radius + radius;
+      const dx = apple.x - x;
+      const dy = apple.y - y;
+      return dx * dx + dy * dy < minDistance * minDistance;
+    });
   }
 
   function canvasPointFromEvent(event: PointerEvent | MouseEvent | TouchEvent, rect: DOMRect) {
