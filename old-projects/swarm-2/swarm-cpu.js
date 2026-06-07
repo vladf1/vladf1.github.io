@@ -1,19 +1,27 @@
 import { updateSprites as updateSpriteMotion } from "./swarm-common.js";
 
-export function createCpuRenderer(canvas, width, height) {
+export function createCpuRenderer(canvas, width, height, renderWidth = width, renderHeight = height) {
   const renderer = {
     canvas,
     context: canvas.getContext("2d", { alpha: false }),
     width: 0,
     height: 0,
+    renderWidth: 0,
+    renderHeight: 0,
+    renderScaleX: 1,
+    renderScaleY: 1,
     bitmap: null,
     bitmapWords: null,
-    resize(nextWidth, nextHeight) {
+    resize(nextWidth, nextHeight, nextRenderWidth = nextWidth, nextRenderHeight = nextHeight) {
       this.width = nextWidth;
       this.height = nextHeight;
-      this.canvas.width = nextWidth;
-      this.canvas.height = nextHeight;
-      this.bitmap = this.context.createImageData(nextWidth, nextHeight);
+      this.renderWidth = nextRenderWidth;
+      this.renderHeight = nextRenderHeight;
+      this.renderScaleX = nextRenderWidth / nextWidth;
+      this.renderScaleY = nextRenderHeight / nextHeight;
+      this.canvas.width = nextRenderWidth;
+      this.canvas.height = nextRenderHeight;
+      this.bitmap = this.context.createImageData(nextRenderWidth, nextRenderHeight);
       this.bitmapWords = new Uint32Array(this.bitmap.data.buffer);
       this.clear();
     },
@@ -29,7 +37,7 @@ export function createCpuRenderer(canvas, width, height) {
     },
     drawSprites(sprites, repelMode) {
       for (const sprite of sprites) {
-        drawCpuSprite(sprite, this.bitmapWords, this.width, this.height, repelMode);
+        drawCpuSprite(sprite, this.bitmapWords, this.renderWidth, this.renderHeight, this.renderScaleX, this.renderScaleY, repelMode);
       }
       this.context.putImageData(this.bitmap, 0, 0);
     },
@@ -39,16 +47,16 @@ export function createCpuRenderer(canvas, width, height) {
       this.drawSprites(sprites, repelMode);
     }
   };
-  renderer.resize(width, height);
+  renderer.resize(width, height, renderWidth, renderHeight);
   return renderer;
 }
 
-function drawCpuSprite(sprite, pixelWords, width, height, repelMode) {
+function drawCpuSprite(sprite, pixelWords, width, height, scaleX, scaleY, repelMode) {
   const colorWord = repelMode ? 0xffffffff : packSpriteColor(sprite);
-  let endX = sprite.xPosition | 0;
-  let endY = sprite.yPosition | 0;
-  let startX = sprite.previousX | 0;
-  let startY = sprite.previousY | 0;
+  let endX = Math.round(sprite.xPosition * scaleX);
+  let endY = Math.round(sprite.yPosition * scaleY);
+  let startX = Math.round(sprite.previousX * scaleX);
+  let startY = Math.round(sprite.previousY * scaleY);
 
   if (endX < 0) {
     endX = 0;

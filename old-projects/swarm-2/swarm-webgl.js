@@ -5,7 +5,7 @@ import {
   updateSprites as updateSpriteMotion
 } from "./swarm-common.js";
 
-export async function createWebglRenderer(canvas, width, height) {
+export async function createWebglRenderer(canvas, width, height, renderWidth = width, renderHeight = height) {
   const gl = canvas.getContext("webgl", {
     alpha: false,
     antialias: false,
@@ -21,6 +21,8 @@ export async function createWebglRenderer(canvas, width, height) {
     gl,
     width: 0,
     height: 0,
+    renderWidth: 0,
+    renderHeight: 0,
     lineProgram,
     fadeProgram,
     lineVertices: null,
@@ -31,12 +33,14 @@ export async function createWebglRenderer(canvas, width, height) {
     fadeAlphaLocation: gl.getUniformLocation(fadeProgram, "u_alpha"),
     lineBuffer: gl.createBuffer(),
     fadeBuffer: gl.createBuffer(),
-    resize(nextWidth, nextHeight) {
+    resize(nextWidth, nextHeight, nextRenderWidth = nextWidth, nextRenderHeight = nextHeight) {
       this.width = nextWidth;
       this.height = nextHeight;
-      this.canvas.width = nextWidth;
-      this.canvas.height = nextHeight;
-      this.gl.viewport(0, 0, nextWidth, nextHeight);
+      this.renderWidth = nextRenderWidth;
+      this.renderHeight = nextRenderHeight;
+      this.canvas.width = nextRenderWidth;
+      this.canvas.height = nextRenderHeight;
+      this.gl.viewport(0, 0, nextRenderWidth, nextRenderHeight);
       this.clear();
     },
     clear() {
@@ -113,7 +117,7 @@ export async function createWebglRenderer(canvas, width, height) {
   gl.disable(gl.DEPTH_TEST);
   gl.disable(gl.CULL_FACE);
   gl.enable(gl.BLEND);
-  renderer.resize(width, height);
+  renderer.resize(width, height, renderWidth, renderHeight);
   return renderer;
 }
 

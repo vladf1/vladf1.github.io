@@ -103,7 +103,15 @@ async function runRendererBenchmark(name, createRenderer, canvas, config) {
 async function runWebgpuComputeBenchmark(config) {
   const sprites = createBenchmarkSprites(config);
   const motionState = createMotionState(config);
-  const renderer = await createWebgpuComputeRenderer(webgpuComputeCanvas, config.width, config.height, sprites, motionState);
+  const renderer = await createWebgpuComputeRenderer(
+    webgpuComputeCanvas,
+    config.width,
+    config.height,
+    config.width,
+    config.height,
+    sprites,
+    motionState
+  );
   if (renderer === null) {
     return createSkippedResult("GPU motion + draw");
   }
