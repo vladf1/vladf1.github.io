@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - codex/reorganize-project-sections
   workflow_dispatch:
 
 permissions:
