@@ -8,64 +8,62 @@ canvas experiments, rebuilds, and TypeScript ports of old Silverlight projects.
 ## Structure
 
 - `index.html` - the root homepage.
-- `favicon.ico` - site icon.
-- `old-projects/` - archived browser projects, rebuilds, and TypeScript canvas ports.
+- `public/favicon.ico` - site icon copied into the build.
+- `canvas-experiments/` - archived browser canvas projects.
+- `rebuilds/` - rebuilt versions of older browser projects.
+- `silverlight-ports/` - TypeScript ports of old Silverlight projects.
+- `public/shared/` - vendored shared browser globals used by the classic pages.
 
 ## Projects
 
 The homepage links to:
 
-- `old-projects/balls/`
-- `old-projects/swarm/`
-- `old-projects/js-fireworks/`
-- `old-projects/magic-trails/`
-- `old-projects/spaceship/`
-- `old-projects/shoot-them-down/`
-- `old-projects/swarm-silverlight-port/`
-- `old-projects/fireworks-silverlight-port/`
-- `old-projects/vector-defence-silverlight-port/`
+- `canvas-experiments/balls/`
+- `canvas-experiments/swarm/`
+- `canvas-experiments/js-fireworks/`
+- `canvas-experiments/spaceship/`
+- `canvas-experiments/shoot-them-down/`
+- `rebuilds/magic-trails/`
+- `rebuilds/swarm-2/`
+- `rebuilds/swarm-3/`
+- `silverlight-ports/swarm/`
+- `silverlight-ports/fireworks/`
+- `silverlight-ports/vector-defence/`
 
 There is also an external link to
 [vector defence 2026](https://vladf1.github.io/vector-defence-2026/).
 
-## Local Preview
+## Local Development
 
-Most of the site is plain static HTML and can be served from the repository root:
-
-```bash
-python3 -m http.server --bind 127.0.0.1 8000
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8000/
-```
-
-## Silverlight Port Development
-
-The TypeScript Silverlight ports share the Vite setup in `old-projects/`.
+Install dependencies from the repository root:
 
 ```bash
-cd old-projects
-npm install
+npm ci
 ```
 
-Run one port locally:
+Run the full site locally:
 
 ```bash
-npm run dev:swarm
+npm run dev
+```
+
+Project-specific dev scripts open individual projects for convenience:
+
+```bash
+npm run dev:swarm-2
+npm run dev:swarm-3
 npm run dev:fireworks
+npm run dev:swarm-port
 npm run dev:vector-defence
 ```
 
-Build all ports:
+Build the whole site:
 
 ```bash
 npm run build
 ```
 
-The build output is written to each port's `dist/` folder and is not committed.
+The production build is written to `dist/` and is not committed.
 
 ## Publishing
 

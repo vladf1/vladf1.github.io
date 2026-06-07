@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - codex/reorganize-project-sections
   workflow_dispatch:
 
 permissions:
@@ -27,28 +28,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: old-projects/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefix old-projects
+        run: npm ci
 
-      - name: Build TypeScript ports
-        run: npm run build --prefix old-projects
-
-      - name: Assemble Pages artifact
-        run: |
-          mkdir -p _site
-          rsync -a ./ _site/ \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='**/node_modules/' \
-            --exclude='**/dist/' \
-            --exclude='old-projects/*-silverlight-port/assets/'
-          cp -R old-projects/fireworks-silverlight-port/dist/. _site/old-projects/fireworks-silverlight-port/
-          cp -R old-projects/swarm-silverlight-port/dist/. _site/old-projects/swarm-silverlight-port/
-          cp -R old-projects/swarm-3/dist/. _site/old-projects/swarm-3/
-          cp -R old-projects/vector-defence-silverlight-port/dist/. _site/old-projects/vector-defence-silverlight-port/
-          touch _site/.nojekyll
+      - name: Build site
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
@@ -58,7 +44,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: _site
+          path: dist
 
   deploy:
     environment:
