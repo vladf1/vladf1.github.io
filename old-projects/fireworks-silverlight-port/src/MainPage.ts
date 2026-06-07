@@ -20,6 +20,8 @@ export class MainPage {
   private readonly sprites: BaseSprite[] = [];
   private height = 0;
   private width = 0;
+  private renderHeight = 0;
+  private renderWidth = 0;
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
   private readonly spritesText: HTMLDivElement;
@@ -141,10 +143,15 @@ export class MainPage {
   };
 
   private UserControl_SizeChanged = (): void => {
-    this.height = Math.max(1, Math.floor(window.innerHeight));
-    this.width = Math.max(1, Math.floor(window.innerWidth));
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
+    const rect = this.canvas.getBoundingClientRect();
+    this.height = Math.max(1, Math.floor(rect.height));
+    this.width = Math.max(1, Math.floor(rect.width));
+    const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    this.renderWidth = Math.max(1, Math.round(this.width * pixelRatio));
+    this.renderHeight = Math.max(1, Math.round(this.height * pixelRatio));
+    this.canvas.width = this.renderWidth;
+    this.canvas.height = this.renderHeight;
+    this.context.setTransform(this.renderWidth / this.width, 0, 0, this.renderHeight / this.height, 0, 0);
     this.context.fillStyle = "black";
     this.context.fillRect(0, 0, this.width, this.height);
   };
