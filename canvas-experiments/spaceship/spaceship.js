@@ -1,4 +1,13 @@
-﻿var TIME_BETWEEN_FRAMES = 1, BaseTicksPerFrame = 1000 / 60;
+﻿import {
+    CanvasFpsCounter,
+    TWO_PI,
+    fixAngle,
+    isOutsideDistance,
+    randomInRange,
+    removeByValue,
+} from "../shared/common.js";
+
+var TIME_BETWEEN_FRAMES = 1, BaseTicksPerFrame = 1000 / 60;
 var HALF_PI = Math.PI / 2, MAX_SHIP_SPEED = 5, BULLET_SPEED = 5;
 var sprites = [], ctx;
 var targets = [];
@@ -325,7 +334,7 @@ window.onload = function () {
 
 
 
-    FrameCounter.startTimer();
+    CanvasFpsCounter.startTimer();
 
     var lastAnimated = 0;
 
@@ -361,7 +370,7 @@ window.onload = function () {
         }
 
         ctx.clearRect(0, 0, 40, 20); // clear box for fps
-        FrameCounter.showFps(ctx);
+        CanvasFpsCounter.showFps(ctx);
 
         setTimeout(renderFrame, TIME_BETWEEN_FRAMES);
     })();

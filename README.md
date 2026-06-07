@@ -10,9 +10,10 @@ canvas experiments, rebuilds, and TypeScript ports of old Silverlight projects.
 - `index.html` - the root homepage.
 - `public/favicon.ico` - site icon copied into the build.
 - `canvas-experiments/` - archived browser canvas projects.
+- `canvas-experiments/shared/` - ES module helpers used by bundled canvas experiments.
 - `rebuilds/` - rebuilt versions of older browser projects.
 - `silverlight-ports/` - TypeScript ports of old Silverlight projects.
-- `public/shared/` - vendored shared browser globals used by the classic pages.
+- `public/shared/` - vendored browser globals used by the classic pages.
 
 ## Projects
 

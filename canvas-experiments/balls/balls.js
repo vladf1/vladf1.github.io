@@ -1,3 +1,5 @@
+import { FrameCounter } from "../shared/frame-counter.js";
+
 class Ball {
     static maxVelocity = 0.5;
     static twoPi = Math.PI * 2;

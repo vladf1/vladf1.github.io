@@ -1,3 +1,5 @@
+import { FrameCounter } from "../shared/frame-counter.js";
+
 /*
 Shot them up game
 Inspired by http://www.roblox.com/Shoot-em-down-Particle-effects-thing-place?id=133089599

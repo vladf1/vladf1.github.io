@@ -1,4 +1,14 @@
-﻿(function () {
+﻿import {
+    CanvasFpsCounter,
+    calcDistance,
+    clearScreen,
+    difBetweenAngles,
+    normalizeAngle,
+    randomInRange,
+    randomNonZeroIntInRange,
+} from "../shared/common.js";
+
+(function () {
     const NUMBER_OF_SPRITES = 160, TIME_BETWEEN_FRAMES = 8,
     MIN_COLOR = 40, MAX_VELOCITY = 6,
     MAX_OFFSET_AMOUNT = 10, TOO_FAR = 450, MIN_DISTANCE = 200,
@@ -150,7 +160,7 @@
             bubble.animate();
             bubble.draw();
         }
-        FrameCounter.showFps(ctx);
+        CanvasFpsCounter.showFps(ctx);
 
         setTimeout(renderFrame, TIME_BETWEEN_FRAMES);
     }
@@ -195,7 +205,7 @@
             }
         });
 
-        FrameCounter.startTimer();
+        CanvasFpsCounter.startTimer();
         renderFrame();
     });
 })();
