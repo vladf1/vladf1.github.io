@@ -1,16 +1,18 @@
 import "./style.css";
 import { MainPage } from "./MainPage";
 
-const canvas = document.querySelector<HTMLCanvasElement>("#rootCanvas");
-if (canvas === null) {
+const maybeCanvas = document.querySelector<HTMLCanvasElement>("#rootCanvas");
+if (maybeCanvas === null) {
   throw new Error("rootCanvas is missing.");
 }
 
-const context = canvas.getContext("2d");
-if (context === null) {
+const canvas = maybeCanvas;
+const maybeContext = canvas.getContext("2d");
+if (maybeContext === null) {
   throw new Error("2D canvas is unavailable.");
 }
 
+const context = maybeContext;
 const logicalWidth = Number(canvas.getAttribute("width"));
 const logicalHeight = Number(canvas.getAttribute("height"));
 
