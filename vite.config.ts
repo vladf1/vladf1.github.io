@@ -3,6 +3,9 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   build: {
+    modulePreload: {
+      polyfill: false,
+    },
     rollupOptions: {
       input: {
         main: "index.html",
