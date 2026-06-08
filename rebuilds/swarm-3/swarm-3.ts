@@ -102,7 +102,9 @@ export async function startSwarmApp() {
       fps = framesRendered;
       framesRendered = 0;
       lastTimed = now;
-      renderer.requestAppleSnapshot(syncApplesFromGpu);
+      if (apples.length > 0) {
+        renderer.requestAppleSnapshot(syncApplesFromGpu);
+      }
     }
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
@@ -122,6 +124,7 @@ export async function startSwarmApp() {
         appleBitePercentPerSecond,
         craziness,
         speed,
+        apples.length > 0,
         activeRepellentX,
         activeRepellentY,
         activeRepellent ? 1 : 0
