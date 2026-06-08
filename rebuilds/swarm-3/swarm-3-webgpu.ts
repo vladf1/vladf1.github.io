@@ -287,6 +287,8 @@ export async function createWebgpuComputeRenderer(
     paramsBuffer = paramsBuffer;
     resolutionBuffer = resolutionBuffer;
     fadeBuffer = fadeBuffer;
+    paramsData = new Float32Array(20);
+    fadeData = new Float32Array(1);
     copyTrailImageToCanvasPipeline = presenter.pipeline;
     presentSampler = presenter.sampler;
     presentBindGroup!: GPUBindGroup;
@@ -365,7 +367,7 @@ export async function createWebgpuComputeRenderer(
         return;
       }
 
-      this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
+      this.paramsData.set([
         this.width,
         this.height,
         this.wormCount,
@@ -381,8 +383,13 @@ export async function createWebgpuComputeRenderer(
         startIndex,
         endIndex,
         0,
-        0
-      ]));
+        0,
+        0,
+        0,
+        0,
+        REPELLENT_RADIUS
+      ]);
+      this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
       const encoder = this.device.createCommandEncoder();
       runComputePass(encoder, this.initializeWormStateRangePipeline, this.initBindGroup, Math.ceil((endIndex - startIndex) / 256));
       this.device.queue.submit([encoder.finish()]);
@@ -417,32 +424,31 @@ export async function createWebgpuComputeRenderer(
       }
       const hasAppleWork = hasActiveApples || applePlacementCount > 0;
       const activeAppleSlotCount = hasAppleWork ? this.appleSlotCount : 0;
-      this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
-        this.width,
-        this.height,
-        this.wormCount,
-        activeAppleSlotCount,
-        elapsedMs,
-        appleBitePercentPerSecond,
-        APPLE_MIN_ACTIVE_RADIUS,
-        APPLE_MAX_RADIUS,
-        WORM_APPLE_TURN_MS,
-        WORM_CHANGE_DIRECTION_MS,
-        WORM_MAX_RANDOM_ANGLE_CHANGE,
-        craziness,
-        applePlacementCount,
-        speed,
-        cursorRepellentActive,
-        0,
-        cursorRepellentX,
-        cursorRepellentY,
-        cursorRepellentActive,
-        REPELLENT_RADIUS
-      ]));
+      this.paramsData[0] = this.width;
+      this.paramsData[1] = this.height;
+      this.paramsData[2] = this.wormCount;
+      this.paramsData[3] = activeAppleSlotCount;
+      this.paramsData[4] = elapsedMs;
+      this.paramsData[5] = appleBitePercentPerSecond;
+      this.paramsData[6] = APPLE_MIN_ACTIVE_RADIUS;
+      this.paramsData[7] = APPLE_MAX_RADIUS;
+      this.paramsData[8] = WORM_APPLE_TURN_MS;
+      this.paramsData[9] = WORM_CHANGE_DIRECTION_MS;
+      this.paramsData[10] = WORM_MAX_RANDOM_ANGLE_CHANGE;
+      this.paramsData[11] = craziness;
+      this.paramsData[12] = applePlacementCount;
+      this.paramsData[13] = speed;
+      this.paramsData[14] = cursorRepellentActive;
+      this.paramsData[15] = 0;
+      this.paramsData[16] = cursorRepellentX;
+      this.paramsData[17] = cursorRepellentY;
+      this.paramsData[18] = cursorRepellentActive;
+      this.paramsData[19] = REPELLENT_RADIUS;
+      this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
 
       if (fadeAmount !== null) {
-        const fadeAlpha = Math.max(0, Math.min(1, 1 - fadeAmount));
-        this.device.queue.writeBuffer(this.fadeBuffer, 0, new Float32Array([fadeAlpha]));
+        this.fadeData[0] = Math.max(0, Math.min(1, 1 - fadeAmount));
+        this.device.queue.writeBuffer(this.fadeBuffer, 0, this.fadeData);
       }
       const encoder = this.device.createCommandEncoder();
       if (fadeAmount !== null) {

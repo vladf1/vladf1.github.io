@@ -59,6 +59,8 @@ export async function startSwarmApp() {
   let framesRendered = 0;
   let fps: number | null = null;
   let appleStats = "none";
+  let statsText = "";
+  let statsDirty = true;
   let paused = false;
   let pendingAnimationFrameId = 0;
   let lastApplePlantMs = 0;
@@ -102,6 +104,7 @@ export async function startSwarmApp() {
       fps = framesRendered;
       framesRendered = 0;
       lastTimed = now;
+      statsDirty = true;
       if (apples.length > 0) {
         renderer.requestAppleSnapshot(syncApplesFromGpu);
       }
@@ -136,7 +139,9 @@ export async function startSwarmApp() {
       return;
     }
 
-    updateStatsText();
+    if (statsDirty) {
+      updateStatsText();
+    }
     framesRendered++;
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
   }
@@ -404,7 +409,12 @@ export async function startSwarmApp() {
   }
 
   function updateStatsText() {
-    stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}\nMode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
+    const nextStatsText = `FPS: ${fps ?? "--"}\nApples: ${appleStats}\nMode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
+    if (nextStatsText !== statsText) {
+      stats.textContent = nextStatsText;
+      statsText = nextStatsText;
+    }
+    statsDirty = false;
   }
 
   function dismissHint() {

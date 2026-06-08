@@ -119,11 +119,14 @@ fn defaultComputeMain(@builtin(global_invocation_id) id: vec3u) {
   var angleStepPerMs = motionC[index].x;
   var angleChangeMsLeft = motionC[index].y;
   let startPosition = position.xy;
+  var motionChanged = false;
+  var turnStateChanged = false;
 
   if (angleChangeMsLeft <= 0.0 && randomUnit(index) < crazinessPerMs * crazinessScale * elapsedMs) {
     let angleChange = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange);
     angleStepPerMs = angleChange / changeDirectionMs;
     angleChangeMsLeft = changeDirectionMs;
+    turnStateChanged = true;
   }
 
   if (angleChangeMsLeft > 0.0) {
@@ -135,6 +138,8 @@ fn defaultComputeMain(@builtin(global_invocation_id) id: vec3u) {
     }
     velocity = vec2f(speed * cos(angle), speed * sin(angle));
     angleChangeMsLeft -= elapsedMs;
+    motionChanged = true;
+    turnStateChanged = true;
   }
 
   var nextPosition = position.xy + velocity * elapsedMs * speedScale;
@@ -164,6 +169,8 @@ fn defaultComputeMain(@builtin(global_invocation_id) id: vec3u) {
     nextPosition = position.xy + velocity * elapsedMs * speedScale;
     angle = atan2(velocity.y, velocity.x);
     angleChangeMsLeft = 0.0;
+    motionChanged = true;
+    turnStateChanged = true;
   }
 
   let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
@@ -173,9 +180,13 @@ fn defaultComputeMain(@builtin(global_invocation_id) id: vec3u) {
   vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 
   positions[index] = vec4f(nextPosition, nextPosition);
-  motionA[index] = vec4f(velocity, speed, crazinessPerMs);
-  motionB[index] = vec4f(offset, 0.0, angle);
-  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
+  if (motionChanged) {
+    motionA[index] = vec4f(velocity, speed, crazinessPerMs);
+    motionB[index] = vec4f(offset, 0.0, angle);
+  }
+  if (turnStateChanged) {
+    motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
+  }
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE)
