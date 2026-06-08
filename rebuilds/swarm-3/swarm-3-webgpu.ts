@@ -10,6 +10,12 @@ export const MAX_APPLES = 128;
 export const APPLE_BITE_PERCENT_PER_SECOND = 0.00016;
 export const DEFAULT_FADE_AMOUNT = 0.1;
 export const FADE_AMOUNT_PER_MS_SCALE = 0.06;
+export const MIN_CRAZINESS = 0;
+export const DEFAULT_CRAZINESS = 1;
+export const MAX_CRAZINESS = 3;
+export const MIN_SPEED = 0.1;
+export const DEFAULT_SPEED = 1;
+export const MAX_SPEED = 3;
 
 const WORM_APPLE_TURN_MS = 83.33333333333333;
 const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
@@ -372,7 +378,13 @@ export async function createWebgpuComputeRenderer(
       this.device.queue.submit([encoder.finish()]);
     }
 
-    drawFrame(elapsedMs: number, fadeAmount: number | null, appleBitePercentPerSecond: number) {
+    drawFrame(
+      elapsedMs: number,
+      fadeAmount: number | null,
+      appleBitePercentPerSecond: number,
+      craziness: number,
+      speed: number
+    ) {
       const applePlacementCount = this.applePlacementCount;
       if (applePlacementCount > 0) {
         this.device.queue.writeBuffer(
@@ -393,9 +405,9 @@ export async function createWebgpuComputeRenderer(
         WORM_APPLE_TURN_MS,
         WORM_CHANGE_DIRECTION_MS,
         WORM_MAX_RANDOM_ANGLE_CHANGE,
-        0,
+        craziness,
         applePlacementCount,
-        0,
+        speed,
         0,
         0
       ]));

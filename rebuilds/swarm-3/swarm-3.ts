@@ -14,14 +14,28 @@ export async function startSwarmApp() {
   const pauseButton = document.querySelector<HTMLButtonElement>("#pauseButton")!;
   const resetApplesButton = document.querySelector<HTMLButtonElement>("#resetApplesButton")!;
   const wormCountInput = document.querySelector<HTMLInputElement>("#wormCount")!;
+  const crazinessInput = document.querySelector<HTMLInputElement>("#craziness")!;
+  const speedInput = document.querySelector<HTMLInputElement>("#speed")!;
   const notice = document.querySelector<HTMLDivElement>("#notice")!;
   let hint = document.querySelector<HTMLDivElement>("#hint");
 
   const params = new URLSearchParams(location.search);
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites") ?? "", 10);
+  const initialCraziness = Number.parseFloat(params.get("Craziness") ?? "");
+  const initialSpeed = Number.parseFloat(params.get("Speed") ?? "");
   let wormCount = Math.min(
     Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : webgpu.DEFAULT_WORM_COUNT,
     webgpu.MAX_SAFE_WORM_COUNT
+  );
+  let craziness = clampNumber(
+    Number.isFinite(initialCraziness) ? initialCraziness : webgpu.DEFAULT_CRAZINESS,
+    webgpu.MIN_CRAZINESS,
+    webgpu.MAX_CRAZINESS
+  );
+  let speed = clampNumber(
+    Number.isFinite(initialSpeed) ? initialSpeed : webgpu.DEFAULT_SPEED,
+    webgpu.MIN_SPEED,
+    webgpu.MAX_SPEED
   );
   let maxWormCount = webgpu.MAX_SAFE_WORM_COUNT;
   let appleBitePercentPerSecond = webgpu.APPLE_BITE_PERCENT_PER_SECOND * webgpu.DEFAULT_WORM_COUNT / wormCount;
@@ -83,7 +97,7 @@ export async function startSwarmApp() {
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
     try {
-      renderer.drawFrame(elapsedMs, frameFadeAmount, appleBitePercentPerSecond);
+      renderer.drawFrame(elapsedMs, frameFadeAmount, appleBitePercentPerSecond, craziness, speed);
     } catch (error) {
       rendererReady = false;
       rendererStatus = error instanceof Error ? error.message : "WebGPU frame failed";
@@ -100,6 +114,8 @@ export async function startSwarmApp() {
     pauseButton.textContent = paused ? "Resume" : "Pause";
     pauseButton.setAttribute("aria-pressed", String(paused));
     wormCountInput.value = String(wormCount);
+    crazinessInput.value = String(craziness);
+    speedInput.value = String(speed);
   }
 
   function setPaused(value: boolean) {
@@ -137,6 +153,28 @@ export async function startSwarmApp() {
     if (!rendererReady || renderer === null || !renderer.setWormCount(wormCount)) {
       resetDrawingSurface();
     }
+    writeConfigToUrl();
+  }
+
+  function setCraziness(value: string) {
+    const parsed = Number.parseFloat(value);
+    craziness = clampNumber(
+      Number.isFinite(parsed) ? parsed : webgpu.DEFAULT_CRAZINESS,
+      webgpu.MIN_CRAZINESS,
+      webgpu.MAX_CRAZINESS
+    );
+    crazinessInput.value = String(craziness);
+    writeConfigToUrl();
+  }
+
+  function setSpeed(value: string) {
+    const parsed = Number.parseFloat(value);
+    speed = clampNumber(
+      Number.isFinite(parsed) ? parsed : webgpu.DEFAULT_SPEED,
+      webgpu.MIN_SPEED,
+      webgpu.MAX_SPEED
+    );
+    speedInput.value = String(speed);
     writeConfigToUrl();
   }
 
@@ -190,6 +228,8 @@ export async function startSwarmApp() {
   function writeConfigToUrl() {
     const query = new URLSearchParams();
     query.set("NumberOfSprites", String(wormCount));
+    query.set("Craziness", formatNumber(craziness));
+    query.set("Speed", formatNumber(speed));
     history.replaceState(null, "", `${location.pathname}?${query}`);
   }
 
@@ -335,9 +375,17 @@ export async function startSwarmApp() {
   resetApplesButton.addEventListener("click", resetApples);
   wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
+  crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));
+  crazinessInput.addEventListener("change", () => setCraziness(crazinessInput.value));
+  speedInput.addEventListener("input", () => setSpeed(speedInput.value));
+  speedInput.addEventListener("change", () => setSpeed(speedInput.value));
 
   syncControls();
   wormCountInput.max = String(maxWormCount);
+  crazinessInput.min = String(webgpu.MIN_CRAZINESS);
+  crazinessInput.max = String(webgpu.MAX_CRAZINESS);
+  speedInput.min = String(webgpu.MIN_SPEED);
+  speedInput.max = String(webgpu.MAX_SPEED);
   if (Number.isFinite(initialWormCount) && initialWormCount > webgpu.MAX_SAFE_WORM_COUNT) {
     showNotice(`WebGPU limit: ${webgpu.MAX_SAFE_WORM_COUNT.toLocaleString()} worms`);
   }
@@ -348,6 +396,14 @@ export async function startSwarmApp() {
 
 function isControlElement(target: EventTarget | null) {
   return target instanceof HTMLButtonElement || target instanceof HTMLInputElement;
+}
+
+function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 if (document.querySelector("#swarm")) {

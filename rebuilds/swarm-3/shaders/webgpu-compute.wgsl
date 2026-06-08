@@ -105,9 +105,11 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let height = params.canvasWormsApples.y;
   let appleCount = u32(params.canvasWormsApples.w);
   let elapsedMs = params.elapsedDistances.x;
+  let speedScale = params.reserved.y;
   let appleTurnMs = params.turn.x;
   let changeDirectionMs = params.turn.y;
   let maxRandomAngleChange = params.turn.z;
+  let crazinessScale = params.turn.w;
 
   var position = positions[index];
   var velocity = motionA[index].xy;
@@ -187,7 +189,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     }
   }
 
-  if (angleChangeMsLeft <= 0.0 && randomUnit(index) < crazinessPerMs * elapsedMs) {
+  if (angleChangeMsLeft <= 0.0 && randomUnit(index) < crazinessPerMs * crazinessScale * elapsedMs) {
     let angleChange = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange);
     angleStepPerMs = angleChange / changeDirectionMs;
     angleChangeMsLeft = changeDirectionMs;
@@ -204,7 +206,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft -= elapsedMs;
   }
 
-  var nextPosition = position.xy + velocity * elapsedMs;
+  var nextPosition = position.xy + velocity * elapsedMs * speedScale;
   var bounced = false;
 
   if (nextPosition.y < 0.0) {
@@ -228,7 +230,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   }
 
   if (bounced) {
-    nextPosition = position.xy + velocity * elapsedMs;
+    nextPosition = position.xy + velocity * elapsedMs * speedScale;
     angle = atan2(velocity.y, velocity.x);
     angleChangeMsLeft = 0.0;
   }
