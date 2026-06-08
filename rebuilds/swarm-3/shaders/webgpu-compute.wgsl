@@ -7,6 +7,7 @@ struct SimParams {
   elapsedDistances: vec4f,
   turn: vec4f,
   reserved: vec4f,
+  cursorRepellent: vec4f,
 };
 
 struct LineVertex {
@@ -110,6 +111,9 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let changeDirectionMs = params.turn.y;
   let maxRandomAngleChange = params.turn.z;
   let crazinessScale = params.turn.w;
+  let cursorRepellentPosition = params.cursorRepellent.xy;
+  let cursorRepellentActive = params.cursorRepellent.z;
+  let cursorRepellentRadius = params.cursorRepellent.w;
 
   var position = positions[index];
   var velocity = motionA[index].xy;
@@ -122,6 +126,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let startPosition = position.xy;
   var appleGlow = 0.0;
   var eatingGlow = 0.0;
+  var repellentGlow = 0.0;
 
   if (appleCount > 0u) {
     var attraction = vec2f(0.0, 0.0);
@@ -158,7 +163,12 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
         let inward = normalize(delta);
         let randomAngle = randomUnit(index) * TWO_PI;
         let randomDirection = vec2f(cos(randomAngle), sin(randomAngle));
-        let attractionDirection = normalize(inward * (0.08 + 0.92 * innerFalloff) + randomDirection * (1.0 - innerFalloff) * 1.4);
+        let tangent = vec2f(-inward.y, inward.x) * randomBetween(index, -1.0, 1.0);
+        let attractionDirection = normalize(
+          inward * (0.08 + 0.62 * innerFalloff) +
+          randomDirection * (0.27 + (1.0 - innerFalloff) * 1.4) +
+          tangent * outerFalloff * (0.22 + 0.26 * crazinessScale)
+        );
         if (pull > strongestPull) {
           secondPull = strongestPull;
           secondAttraction = attraction;
@@ -184,7 +194,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
     if (dot(attraction, attraction) > 0.0001) {
       angleChangeMsLeft = appleTurnMs;
-      let newAngle = atan2(attraction.y, attraction.x);
+      let attractionJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * appleGlow * (0.13 + 0.11 * crazinessScale);
+      let newAngle = atan2(attraction.y, attraction.x) + attractionJitter;
       angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
     }
   }
@@ -195,8 +206,29 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft = changeDirectionMs;
   }
 
+  if (cursorRepellentActive > 0.0) {
+    let repellentDelta = position.xy - cursorRepellentPosition;
+    let repellentDistanceSquared = dot(repellentDelta, repellentDelta);
+    let repellentRadiusSquared = cursorRepellentRadius * cursorRepellentRadius;
+    if (repellentDistanceSquared > 1.0 && repellentDistanceSquared < repellentRadiusSquared) {
+      let repellentDistance = sqrt(repellentDistanceSquared);
+      let repellentFalloff = 1.0 - repellentDistance / cursorRepellentRadius;
+      let randomAngle = randomUnit(index) * TWO_PI;
+      let escapeDirection = normalize(repellentDelta);
+      let tangent = vec2f(-escapeDirection.y, escapeDirection.x) * randomBetween(index, -1.0, 1.0);
+      let scatter = vec2f(cos(randomAngle), sin(randomAngle)) * repellentFalloff * (0.72 + 0.24 * crazinessScale);
+      let escape = escapeDirection + scatter + tangent * repellentFalloff * (0.38 + 0.22 * crazinessScale);
+      angleChangeMsLeft = mix(changeDirectionMs * 0.45, changeDirectionMs, repellentFalloff);
+      let repellentJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * repellentFalloff * (0.22 + 0.14 * crazinessScale);
+      let newAngle = atan2(escape.y, escape.x) + repellentJitter;
+      angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
+      repellentGlow = max(repellentGlow, repellentFalloff);
+    }
+  }
+
   if (angleChangeMsLeft > 0.0) {
     angle += angleStepPerMs * elapsedMs;
+    angle += randomBetween(index, -1.0, 1.0) * (appleGlow * 0.096 + repellentGlow * 0.192) * (0.52 + 0.28 * crazinessScale);
     if (angle < 0.0) {
       angle += TWO_PI;
     } else if (angle >= TWO_PI) {
@@ -240,8 +272,10 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let baseColor = wormColor(index);
   let appleTint = vec3f(1.0, 0.18, 0.05);
   let eatingTint = vec3f(1.0, 0.92, 0.3);
+  let repellentTint = vec3f(0.05, 0.82, 1.0);
   let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
-  let color = vec4f(mix(attractedColor, eatingTint, eatingGlow * 0.55), min(1.0, baseColor.a + appleGlow * 0.14));
+  let hungryColor = mix(attractedColor, eatingTint, eatingGlow * 0.55);
+  let color = vec4f(mix(hungryColor, repellentTint, repellentGlow * 0.7), min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2));
   vertices[index * 2u] = LineVertex(clampedStart, color);
   vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 

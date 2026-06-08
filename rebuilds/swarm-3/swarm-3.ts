@@ -7,6 +7,10 @@ type AppleState = {
   volume: number;
   radius: number;
 };
+type RepellentState = {
+  x: number;
+  y: number;
+};
 
 export async function startSwarmApp() {
   const canvas = document.querySelector<HTMLCanvasElement>("#swarm")!;
@@ -49,6 +53,7 @@ export async function startSwarmApp() {
   let rendererStatus = "Loading WebGPU...";
   let rendererGeneration = 0;
   let apples: AppleState[] = [];
+  let repellents: RepellentState[] = [];
   let lastAnimated = 0;
   let lastTimed = performance.now();
   let framesRendered = 0;
@@ -57,7 +62,12 @@ export async function startSwarmApp() {
   let paused = false;
   let pendingAnimationFrameId = 0;
   let lastApplePlantMs = 0;
+  let lastRepellentPlantMs = 0;
   let noticeTimeoutId = 0;
+  let repellentX = 0;
+  let repellentY = 0;
+  let placingRepellent = false;
+  let cursorVisible = false;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -96,8 +106,26 @@ export async function startSwarmApp() {
     }
 
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
+    let activeRepellentX = repellentX;
+    let activeRepellentY = repellentY;
+    let activeRepellent = false;
+    if (repellents.length > 0) {
+      const repellent = repellents[framesRendered % repellents.length]!;
+      activeRepellentX = repellent.x;
+      activeRepellentY = repellent.y;
+      activeRepellent = true;
+    }
     try {
-      renderer.drawFrame(elapsedMs, frameFadeAmount, appleBitePercentPerSecond, craziness, speed);
+      renderer.drawFrame(
+        elapsedMs,
+        frameFadeAmount,
+        appleBitePercentPerSecond,
+        craziness,
+        speed,
+        activeRepellentX,
+        activeRepellentY,
+        activeRepellent ? 1 : 0
+      );
     } catch (error) {
       rendererReady = false;
       rendererStatus = error instanceof Error ? error.message : "WebGPU frame failed";
@@ -105,7 +133,7 @@ export async function startSwarmApp() {
       return;
     }
 
-    stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}`;
+    updateStatsText();
     framesRendered++;
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
   }
@@ -217,6 +245,7 @@ export async function startSwarmApp() {
       stats.textContent = rendererStatus;
     });
     apples = [];
+    renderer.setRepellents(repellents);
     updateAppleStatsText();
     lastAnimated = 0;
     lastTimed = performance.now();
@@ -238,6 +267,11 @@ export async function startSwarmApp() {
       return;
     }
     event.preventDefault();
+    if ("shiftKey" in event && event.shiftKey) {
+      plantRepellent(event);
+      return;
+    }
+
     const now = performance.now();
     if (now - lastApplePlantMs < 350) {
       return;
@@ -265,8 +299,45 @@ export async function startSwarmApp() {
 
     apples.push({ x, y, volume: 1, radius: webgpu.APPLE_MAX_RADIUS });
     updateAppleStatsText();
-    hint?.classList.add("is-fading");
-    hint = null;
+    dismissHint();
+  }
+
+  function plantRepellent(event: PointerEvent | TouchEvent | MouseEvent) {
+    const now = performance.now();
+    if (now - lastRepellentPlantMs < 350) {
+      return;
+    }
+    lastRepellentPlantMs = now;
+
+    const rect = canvas.getBoundingClientRect();
+    const point = canvasPointFromEvent(event, rect);
+    if (!rendererReady || renderer === null) {
+      return;
+    }
+
+    const existingIndex = repellents.findIndex(repellent => {
+      const dx = repellent.x - point.x;
+      const dy = repellent.y - point.y;
+      return dx * dx + dy * dy < 34 * 34;
+    });
+    if (existingIndex >= 0) {
+      repellents.splice(existingIndex, 1);
+      renderer.setRepellents(repellents);
+      renderer.setApplePreview(0, 0, false);
+      showNotice("Repellent removed");
+      return;
+    }
+
+    if (repellents.length >= webgpu.MAX_REPELLENTS) {
+      showNotice(`Max repellents reached (${webgpu.MAX_REPELLENTS})`);
+      return;
+    }
+
+    const repellent = clampRepellentCenter(point);
+    repellents.push(repellent);
+    renderer.setRepellents(repellents);
+    renderer.setApplePreview(0, 0, false);
+    dismissHint();
   }
 
   function updateApplePreview(event: PointerEvent) {
@@ -276,19 +347,32 @@ export async function startSwarmApp() {
 
     const rect = canvas.getBoundingClientRect();
     const { x, y } = canvasPointFromEvent(event, rect);
-    renderer.setApplePreview(x, y, true);
+    repellentX = x;
+    repellentY = y;
+    placingRepellent = event.shiftKey;
+    cursorVisible = true;
+    if (placingRepellent) {
+      dismissHint();
+    }
+    updateStatsText();
+    renderer.setApplePreview(x, y, true, placingRepellent);
   }
 
   function hideApplePreview() {
+    placingRepellent = false;
+    cursorVisible = false;
+    updateStatsText();
     renderer?.setApplePreview(0, 0, false);
   }
 
-  function resetApples(event?: Event) {
+  function resetSimulation(event?: Event) {
     event?.preventDefault();
     event?.stopPropagation();
     apples = [];
+    repellents = [];
     updateAppleStatsText();
     renderer?.resetApples();
+    renderer?.setRepellents(repellents);
   }
 
   function syncApplesFromGpu(snapshot: Float32Array) {
@@ -313,10 +397,28 @@ export async function startSwarmApp() {
 
   function updateAppleStatsText() {
     appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
+    updateStatsText();
+  }
+
+  function updateStatsText() {
+    stats.textContent = `FPS: ${fps ?? "--"}\nApples: ${appleStats}\nMode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
+  }
+
+  function dismissHint() {
+    hint?.classList.add("is-fading");
+    hint = null;
   }
 
   function clampAppleCenter(point: { x: number; y: number }) {
     const minCenter = webgpu.APPLE_MAX_RADIUS;
+    return {
+      x: Math.max(minCenter, Math.min(point.x, Math.max(canvasWidth - minCenter, minCenter))),
+      y: Math.max(minCenter, Math.min(point.y, Math.max(canvasHeight - minCenter, minCenter)))
+    };
+  }
+
+  function clampRepellentCenter(point: { x: number; y: number }) {
+    const minCenter = webgpu.REPELLENT_MARKER_RADIUS;
     return {
       x: Math.max(minCenter, Math.min(point.x, Math.max(canvasWidth - minCenter, minCenter))),
       y: Math.max(minCenter, Math.min(point.y, Math.max(canvasHeight - minCenter, minCenter)))
@@ -352,6 +454,16 @@ export async function startSwarmApp() {
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
+      placingRepellent = true;
+      dismissHint();
+      updateStatsText();
+      if (cursorVisible) {
+        renderer?.setApplePreview(repellentX, repellentY, true, true);
+      }
+      return;
+    }
+
     if (event.code !== "Space" || event.repeat || isControlElement(event.target)) {
       return;
     }
@@ -360,11 +472,24 @@ export async function startSwarmApp() {
     setPaused(!paused);
   }
 
+  function handleKeyUp(event: KeyboardEvent) {
+    if (event.code !== "ShiftLeft" && event.code !== "ShiftRight") {
+      return;
+    }
+
+    placingRepellent = false;
+    updateStatsText();
+    if (cursorVisible) {
+      renderer?.setApplePreview(repellentX, repellentY, true, false);
+    }
+  }
+
   addEventListener("resize", resize);
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", resize);
   }
   addEventListener("keydown", handleKeyDown);
+  addEventListener("keyup", handleKeyUp);
   canvas.addEventListener("pointermove", updateApplePreview);
   canvas.addEventListener("pointerleave", hideApplePreview);
   canvas.addEventListener("pointercancel", hideApplePreview);
@@ -372,7 +497,7 @@ export async function startSwarmApp() {
   canvas.addEventListener("touchstart", plantApple, { passive: false });
   canvas.addEventListener("mousedown", plantApple);
   pauseButton.addEventListener("click", () => setPaused(!paused));
-  resetApplesButton.addEventListener("click", resetApples);
+  resetApplesButton.addEventListener("click", resetSimulation);
   wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
   crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));
@@ -381,6 +506,7 @@ export async function startSwarmApp() {
   speedInput.addEventListener("change", () => setSpeed(speedInput.value));
 
   syncControls();
+  updateStatsText();
   wormCountInput.max = String(maxWormCount);
   crazinessInput.min = String(webgpu.MIN_CRAZINESS);
   crazinessInput.max = String(webgpu.MAX_CRAZINESS);

@@ -7,6 +7,7 @@ import fadeShaderSource from "./shaders/webgpu-fade.wgsl?raw";
 export const DEFAULT_WORM_COUNT = 2500;
 export const MAX_SAFE_WORM_COUNT = 2000000;
 export const MAX_APPLES = 128;
+export const MAX_REPELLENTS = 32;
 export const APPLE_BITE_PERCENT_PER_SECOND = 0.00016;
 export const DEFAULT_FADE_AMOUNT = 0.1;
 export const FADE_AMOUNT_PER_MS_SCALE = 0.06;
@@ -21,12 +22,16 @@ const WORM_APPLE_TURN_MS = 83.33333333333333;
 const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
 const WORM_MAX_RANDOM_ANGLE_CHANGE = 1.5;
 export const APPLE_MAX_RADIUS = 62;
+const REPELLENT_RADIUS = 220;
+export const REPELLENT_MARKER_RADIUS = 34;
 const APPLE_MIN_ACTIVE_RADIUS = 15;
 const FLOATS_PER_APPLE = 4;
 const FLOATS_PER_MARKER_VERTEX = 8;
 const FLOATS_PER_PREVIEW = 4;
 const APPLE_RADIUS_SEGMENTS = 96;
 const VERTICES_PER_APPLE_MARKER = 16 + APPLE_RADIUS_SEGMENTS * 2;
+const REPELLENT_BURST_RAYS = 8;
+const VERTICES_PER_REPELLENT_MARKER = REPELLENT_BURST_RAYS * 2;
 const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
 const VERTICES_PER_WORM = 2;
 const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
@@ -90,6 +95,7 @@ export async function createWebgpuComputeRenderer(
   const appleFreeCountData = new Uint32Array([MAX_APPLES]);
   const applePlacementData = new Float32Array(MAX_APPLE_PLACEMENTS_PER_FRAME * FLOATS_PER_APPLE);
   const applePreviewData = new Float32Array(FLOATS_PER_PREVIEW);
+  const repellentMarkerData = new Float32Array(MAX_REPELLENTS * VERTICES_PER_REPELLENT_MARKER * FLOATS_PER_MARKER_VERTEX);
 
   for (let index = 0; index < MAX_APPLES; index++) {
     appleFreeSlotData[index] = MAX_APPLES - 1 - index;
@@ -171,7 +177,11 @@ export async function createWebgpuComputeRenderer(
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
   const applePreviewBuffer = createUniformBuffer(device, applePreviewData.byteLength);
-  const paramsBuffer = createUniformBuffer(device, 64);
+  const repellentVertexBuffer = device.createBuffer({
+    size: repellentMarkerData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  });
+  const paramsBuffer = createUniformBuffer(device, 80);
   const resolutionBuffer = createUniformBuffer(device, 8);
   const fadeBuffer = createUniformBuffer(device, 4);
   const presenter = createWebgpuPresenter(device, format, presentShaderSource);
@@ -258,11 +268,14 @@ export async function createWebgpuComputeRenderer(
     appleFreeCountData = appleFreeCountData;
     appleVertexBuffer = appleVertexBuffer;
     applePreviewBuffer = applePreviewBuffer;
+    repellentVertexBuffer = repellentVertexBuffer;
     appleData = appleData;
     appleMarkerData = appleMarkerData;
     applePlacementData = applePlacementData;
     applePreviewData = applePreviewData;
+    repellentMarkerData = repellentMarkerData;
     appleSlotCount = MAX_APPLES;
+    repellentCount = 0;
     applePlacementCount = 0;
     applePreviewVisible = false;
     appleSnapshotPending = false;
@@ -383,7 +396,10 @@ export async function createWebgpuComputeRenderer(
       fadeAmount: number | null,
       appleBitePercentPerSecond: number,
       craziness: number,
-      speed: number
+      speed: number,
+      cursorRepellentX: number,
+      cursorRepellentY: number,
+      cursorRepellentActive: number
     ) {
       const applePlacementCount = this.applePlacementCount;
       if (applePlacementCount > 0) {
@@ -408,8 +424,12 @@ export async function createWebgpuComputeRenderer(
         craziness,
         applePlacementCount,
         speed,
+        cursorRepellentActive,
         0,
-        0
+        cursorRepellentX,
+        cursorRepellentY,
+        cursorRepellentActive,
+        REPELLENT_RADIUS
       ]));
 
       if (fadeAmount !== null) {
@@ -445,6 +465,7 @@ export async function createWebgpuComputeRenderer(
       const targetView = this.context.getCurrentTexture().createView();
       this.presentTrail(encoder, targetView);
       this.drawAppleOverlay(encoder, targetView);
+      this.drawRepellentOverlay(encoder, targetView);
       this.drawApplePreview(encoder, targetView);
       this.device.queue.submit([encoder.finish()]);
       this.applePlacementCount = 0;
@@ -481,6 +502,21 @@ export async function createWebgpuComputeRenderer(
       this.device.queue.writeBuffer(this.appleFreeSlotBuffer, 0, this.appleFreeSlotData);
       this.device.queue.writeBuffer(this.appleFreeCountBuffer, 0, this.appleFreeCountData);
       this.device.queue.writeBuffer(this.appleVertexBuffer, 0, this.appleMarkerData);
+    }
+
+    setRepellents(repellents: Array<{ x: number; y: number }>) {
+      this.repellentMarkerData.fill(0);
+      this.repellentCount = Math.min(repellents.length, MAX_REPELLENTS);
+      for (let index = 0; index < this.repellentCount; index++) {
+        const repellent = repellents[index]!;
+        writeRepellentMarkerVertices(
+          this.repellentMarkerData,
+          index * VERTICES_PER_REPELLENT_MARKER * FLOATS_PER_MARKER_VERTEX,
+          repellent.x,
+          repellent.y
+        );
+      }
+      this.device.queue.writeBuffer(this.repellentVertexBuffer, 0, this.repellentMarkerData);
     }
 
     requestAppleSnapshot(handler: (snapshot: Float32Array) => void) {
@@ -533,9 +569,22 @@ export async function createWebgpuComputeRenderer(
       pass.end();
     }
 
-    setApplePreview(x: number, y: number, visible: boolean) {
+    drawRepellentOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
+      if (this.repellentCount === 0) {
+        return;
+      }
+
+      const pass = beginRenderPass(encoder, targetView);
+      pass.setPipeline(this.drawBufferedLineVerticesPipeline);
+      pass.setBindGroup(0, this.lineBindGroup);
+      pass.setVertexBuffer(0, this.repellentVertexBuffer);
+      pass.draw(this.repellentCount * VERTICES_PER_REPELLENT_MARKER);
+      pass.end();
+    }
+
+    setApplePreview(x: number, y: number, visible: boolean, repellent = false) {
       this.applePreviewVisible = visible;
-      this.applePreviewData.set([x, y, visible ? 1 : 0, 0]);
+      this.applePreviewData.set([x, y, visible ? 1 : 0, repellent ? 1 : 0]);
       this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
     }
 
@@ -687,6 +736,44 @@ function createLinePipeline(
       topology: "line-list"
     }
   });
+}
+
+function writeRepellentMarkerVertices(data: Float32Array, baseOffset: number, centerX: number, centerY: number) {
+  let vertexOffset = baseOffset;
+  for (let rayIndex = 0; rayIndex < REPELLENT_BURST_RAYS; rayIndex++) {
+    const angle = rayIndex / REPELLENT_BURST_RAYS * Math.PI * 2;
+    vertexOffset = writeMarkerVertex(data, vertexOffset, centerX, centerY, 0.72, 0.96, 1, 0.78);
+    vertexOffset = writeMarkerVertex(
+      data,
+      vertexOffset,
+      centerX + Math.cos(angle) * REPELLENT_MARKER_RADIUS,
+      centerY + Math.sin(angle) * REPELLENT_MARKER_RADIUS,
+      0.72,
+      0.96,
+      1,
+      0.78
+    );
+  }
+
+}
+
+function writeMarkerVertex(
+  data: Float32Array,
+  offset: number,
+  x: number,
+  y: number,
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number
+) {
+  data[offset] = x;
+  data[offset + 1] = y;
+  data[offset + 4] = red;
+  data[offset + 5] = green;
+  data[offset + 6] = blue;
+  data[offset + 7] = alpha;
+  return offset + FLOATS_PER_MARKER_VERTEX;
 }
 
 function createWormResources(device: GPUDevice, capacityWormCount: number) {
