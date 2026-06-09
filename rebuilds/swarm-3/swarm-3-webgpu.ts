@@ -496,7 +496,7 @@ export async function createWebgpuComputeRenderer(
       const wormPass = beginRenderPass(encoder, targetView, "clear");
       wormPass.setPipeline(this.drawWormSegmentsPipeline);
       wormPass.setBindGroup(0, this.wormBindGroup);
-      wormPass.draw(this.wormCount * this.tailSegmentCount * 2);
+      wormPass.draw(this.tailSegmentCount * 2, this.wormCount);
       wormPass.end();
 
       if (hasAppleWork) {

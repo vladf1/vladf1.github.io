@@ -19,12 +19,14 @@ fn clipPosition(canvasPosition: vec2f) -> vec4f {
 }
 
 @vertex
-fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+fn vertexMain(
+  @builtin(vertex_index) vertexIndex: u32,
+  @builtin(instance_index) instanceIndex: u32
+) -> VertexOutput {
   let segmentCount = max(1u, u32(renderInfo.counts.x));
   let segmentNodeCount = max(segmentCount + 1u, u32(renderInfo.counts.y));
-  let verticesPerWorm = segmentCount * 2u;
-  let wormIndex = vertexIndex / verticesPerWorm;
-  let segmentIndex = (vertexIndex % verticesPerWorm) / 2u;
+  let wormIndex = instanceIndex;
+  let segmentIndex = vertexIndex >> 1u;
   let endpointIndex = vertexIndex & 1u;
   let baseOffset = wormIndex * segmentNodeCount;
   let startPosition = segmentPositions[baseOffset + segmentIndex];
