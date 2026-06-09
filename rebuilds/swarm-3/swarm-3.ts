@@ -1,12 +1,14 @@
 import * as webgpu from "./swarm-3-webgpu";
 
 type WebgpuRenderer = Awaited<ReturnType<typeof webgpu.createWebgpuComputeRenderer>>;
+
 type AppleState = {
   x: number;
   y: number;
   volume: number;
   radius: number;
 };
+
 type RepellentState = {
   x: number;
   y: number;
@@ -18,6 +20,7 @@ export async function startSwarmApp() {
   const pauseButton = document.querySelector<HTMLButtonElement>("#pauseButton")!;
   const resetApplesButton = document.querySelector<HTMLButtonElement>("#resetApplesButton")!;
   const wormCountInput = document.querySelector<HTMLInputElement>("#wormCount")!;
+  const tailSegmentsInput = document.querySelector<HTMLInputElement>("#tailSegments")!;
   const crazinessInput = document.querySelector<HTMLInputElement>("#craziness")!;
   const speedInput = document.querySelector<HTMLInputElement>("#speed")!;
   const notice = document.querySelector<HTMLDivElement>("#notice")!;
@@ -25,11 +28,17 @@ export async function startSwarmApp() {
 
   const params = new URLSearchParams(location.search);
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites") ?? "", 10);
+  const initialTailSegments = Number.parseInt(params.get("TailSegments") ?? "", 10);
   const initialCraziness = Number.parseFloat(params.get("Craziness") ?? "");
   const initialSpeed = Number.parseFloat(params.get("Speed") ?? "");
   let wormCount = Math.min(
     Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : webgpu.DEFAULT_WORM_COUNT,
     webgpu.MAX_SAFE_WORM_COUNT
+  );
+  let tailSegments = clampWholeNumber(
+    Number.isFinite(initialTailSegments) ? initialTailSegments : webgpu.DEFAULT_TAIL_SEGMENTS,
+    webgpu.MIN_TAIL_SEGMENTS,
+    webgpu.MAX_TAIL_SEGMENTS
   );
   let craziness = clampNumber(
     Number.isFinite(initialCraziness) ? initialCraziness : webgpu.DEFAULT_CRAZINESS,
@@ -43,7 +52,6 @@ export async function startSwarmApp() {
   );
   let maxWormCount = webgpu.MAX_SAFE_WORM_COUNT;
   let appleBitePercentPerSecond = webgpu.APPLE_BITE_PERCENT_PER_SECOND * webgpu.DEFAULT_WORM_COUNT / wormCount;
-  const fadeAmountPerMs = webgpu.DEFAULT_FADE_AMOUNT * webgpu.FADE_AMOUNT_PER_MS_SCALE;
   let canvasWidth = 0;
   let canvasHeight = 0;
   let canvasRenderWidth = 0;
@@ -83,7 +91,8 @@ export async function startSwarmApp() {
       renderer.resize(canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight);
       return;
     }
-    resetDrawingSurface();
+
+    void resetDrawingSurface();
   }
 
   function renderFrame(now: number) {
@@ -110,7 +119,6 @@ export async function startSwarmApp() {
       }
     }
 
-    const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
     let activeRepellentX = repellentX;
     let activeRepellentY = repellentY;
     let activeRepellent = false;
@@ -120,10 +128,10 @@ export async function startSwarmApp() {
       activeRepellentY = repellent.y;
       activeRepellent = true;
     }
+
     try {
       renderer.drawFrame(
         elapsedMs,
-        frameFadeAmount,
         appleBitePercentPerSecond,
         craziness,
         speed,
@@ -150,6 +158,7 @@ export async function startSwarmApp() {
     pauseButton.textContent = paused ? "Resume" : "Pause";
     pauseButton.setAttribute("aria-pressed", String(paused));
     wormCountInput.value = String(wormCount);
+    tailSegmentsInput.value = String(tailSegments);
     crazinessInput.value = String(craziness);
     speedInput.value = String(speed);
   }
@@ -187,9 +196,27 @@ export async function startSwarmApp() {
     appleBitePercentPerSecond = webgpu.APPLE_BITE_PERCENT_PER_SECOND * webgpu.DEFAULT_WORM_COUNT / wormCount;
     wormCountInput.value = String(wormCount);
     if (!rendererReady || renderer === null || !renderer.setWormCount(wormCount)) {
-      resetDrawingSurface();
+      void resetDrawingSurface();
     }
     writeConfigToUrl();
+  }
+
+  function setTailSegments(value: string) {
+    const parsed = Number.parseInt(value, 10);
+    const nextTailSegments = clampWholeNumber(
+      Number.isFinite(parsed) ? parsed : webgpu.DEFAULT_TAIL_SEGMENTS,
+      webgpu.MIN_TAIL_SEGMENTS,
+      webgpu.MAX_TAIL_SEGMENTS
+    );
+    if (nextTailSegments === tailSegments) {
+      tailSegmentsInput.value = String(tailSegments);
+      return;
+    }
+
+    tailSegments = nextTailSegments;
+    tailSegmentsInput.value = String(tailSegments);
+    writeConfigToUrl();
+    void resetDrawingSurface();
   }
 
   function setCraziness(value: string) {
@@ -216,23 +243,37 @@ export async function startSwarmApp() {
 
   async function resetDrawingSurface() {
     const generation = rendererGeneration + 1;
+    const deviceSource = renderer;
     rendererGeneration = generation;
     rendererReady = false;
     rendererStatus = "Loading WebGPU...";
     renderer = null;
+
     try {
-      renderer = await Promise.race([
-        webgpu.createWebgpuComputeRenderer(canvas, canvasWidth, canvasHeight, canvasRenderWidth, canvasRenderHeight, wormCount),
-        new Promise<never>((_resolve, reject) => {
-          setTimeout(() => reject(new Error("WebGPU initialization timed out")), 4000);
-        })
-      ]);
+      await withTimeout(syncMaxWormCountForTailSegments(deviceSource), "WebGPU initialization timed out");
+      if (generation !== rendererGeneration) {
+        return;
+      }
+
+      renderer = await withTimeout(
+        webgpu.createWebgpuComputeRenderer(
+          canvas,
+          canvasWidth,
+          canvasHeight,
+          canvasRenderWidth,
+          canvasRenderHeight,
+          wormCount,
+          tailSegments
+        ),
+        "WebGPU initialization timed out"
+      );
     } catch (error) {
       if (generation === rendererGeneration) {
         rendererStatus = error instanceof Error ? error.message : "WebGPU unavailable";
       }
       return;
     }
+
     if (generation !== rendererGeneration) {
       return;
     }
@@ -240,6 +281,7 @@ export async function startSwarmApp() {
       rendererStatus = "gpu" in navigator ? "WebGPU unavailable." : "WebGPU unavailable in this browser.";
       return;
     }
+
     maxWormCount = Math.min(renderer.maxSupportedWormCount, webgpu.MAX_SAFE_WORM_COUNT);
     wormCountInput.max = String(maxWormCount);
     renderer.resetApples();
@@ -262,9 +304,26 @@ export async function startSwarmApp() {
     rendererReady = true;
   }
 
+  async function syncMaxWormCountForTailSegments(deviceSource: { device: GPUDevice } | null) {
+    const supportedWormCount = deviceSource !== null
+      ? webgpu.getMaxSupportedWormCountForTailSegmentsFromLimits(deviceSource.device, tailSegments)
+      : await webgpu.getMaxSupportedWormCountForTailSegments(tailSegments);
+
+    maxWormCount = Math.min(supportedWormCount, webgpu.MAX_SAFE_WORM_COUNT);
+    wormCountInput.max = String(maxWormCount);
+    if (wormCount > maxWormCount) {
+      wormCount = maxWormCount;
+      appleBitePercentPerSecond = webgpu.APPLE_BITE_PERCENT_PER_SECOND * webgpu.DEFAULT_WORM_COUNT / wormCount;
+      wormCountInput.value = String(wormCount);
+      showNotice(`WebGPU limit: ${maxWormCount.toLocaleString()} worms`);
+      writeConfigToUrl();
+    }
+  }
+
   function writeConfigToUrl() {
     const query = new URLSearchParams();
     query.set("NumberOfSprites", String(wormCount));
+    query.set("TailSegments", String(tailSegments));
     query.set("Craziness", formatNumber(craziness));
     query.set("Speed", formatNumber(speed));
     history.replaceState(null, "", `${location.pathname}?${query}`);
@@ -409,7 +468,9 @@ export async function startSwarmApp() {
   }
 
   function updateStatsText() {
-    const nextStatsText = `FPS: ${fps ?? "--"}\nApples: ${appleStats}\nMode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
+    const nextStatsText = `FPS: ${fps ?? "--"}
+Apples: ${appleStats}
+Mode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
     if (nextStatsText !== statsText) {
       stats.textContent = nextStatsText;
       statsText = nextStatsText;
@@ -513,6 +574,8 @@ export async function startSwarmApp() {
   resetApplesButton.addEventListener("click", resetSimulation);
   wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
+  tailSegmentsInput.addEventListener("input", () => setTailSegments(tailSegmentsInput.value));
+  tailSegmentsInput.addEventListener("change", () => setTailSegments(tailSegmentsInput.value));
   crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));
   crazinessInput.addEventListener("change", () => setCraziness(crazinessInput.value));
   speedInput.addEventListener("input", () => setSpeed(speedInput.value));
@@ -521,6 +584,8 @@ export async function startSwarmApp() {
   syncControls();
   updateStatsText();
   wormCountInput.max = String(maxWormCount);
+  tailSegmentsInput.min = String(webgpu.MIN_TAIL_SEGMENTS);
+  tailSegmentsInput.max = String(webgpu.MAX_TAIL_SEGMENTS);
   crazinessInput.min = String(webgpu.MIN_CRAZINESS);
   crazinessInput.max = String(webgpu.MAX_CRAZINESS);
   speedInput.min = String(webgpu.MIN_SPEED);
@@ -541,8 +606,21 @@ function clampNumber(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function clampWholeNumber(value: number, minimum: number, maximum: number) {
+  return Math.round(clampNumber(value, minimum, maximum));
+}
+
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function withTimeout<T>(promise: Promise<T>, message: string, delayMs = 4000) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(message)), delayMs);
+    })
+  ]);
 }
 
 if (document.querySelector("#swarm")) {

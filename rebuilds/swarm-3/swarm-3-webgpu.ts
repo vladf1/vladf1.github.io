@@ -1,26 +1,27 @@
-import presentShaderSource from "./shaders/webgpu-present.wgsl?raw";
 import computeShaderSource from "./shaders/webgpu-compute.wgsl?raw";
 import appleShaderSource from "./shaders/webgpu-apple.wgsl?raw";
 import lineShaderSource from "./shaders/webgpu-line.wgsl?raw";
-import fadeShaderSource from "./shaders/webgpu-fade.wgsl?raw";
+import wormShaderSource from "./shaders/webgpu-worm.wgsl?raw";
 
 export const DEFAULT_WORM_COUNT = 2500;
 export const MAX_SAFE_WORM_COUNT = 2000000;
 export const MAX_APPLES = 128;
 export const MAX_REPELLENTS = 32;
 export const APPLE_BITE_PERCENT_PER_SECOND = 0.00016;
-export const DEFAULT_FADE_AMOUNT = 0.1;
-export const FADE_AMOUNT_PER_MS_SCALE = 0.06;
 export const MIN_CRAZINESS = 0;
 export const DEFAULT_CRAZINESS = 1;
 export const MAX_CRAZINESS = 3;
 export const MIN_SPEED = 0.1;
 export const DEFAULT_SPEED = 1;
 export const MAX_SPEED = 3;
+export const MIN_TAIL_SEGMENTS = 2;
+export const DEFAULT_TAIL_SEGMENTS = 10;
+export const MAX_TAIL_SEGMENTS = 32;
 
 const WORM_APPLE_TURN_MS = 83.33333333333333;
 const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
 const WORM_MAX_RANDOM_ANGLE_CHANGE = 1.5;
+const WORM_SEGMENT_SPACING = 9;
 export const APPLE_MAX_RADIUS = 62;
 const REPELLENT_RADIUS = 220;
 export const REPELLENT_MARKER_RADIUS = 34;
@@ -33,42 +34,36 @@ const VERTICES_PER_APPLE_MARKER = 16 + APPLE_RADIUS_SEGMENTS * 2;
 const REPELLENT_BURST_RAYS = 8;
 const VERTICES_PER_REPELLENT_MARKER = REPELLENT_BURST_RAYS * 2;
 const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
-const VERTICES_PER_WORM = 2;
 const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
 const WORM_CAPACITY_BUCKET_SIZE = 250000;
 const FLOATS_PER_WORM_VEC4_BUFFER = 4;
 const BYTES_PER_WORM_VEC4_BUFFER = FLOATS_PER_WORM_VEC4_BUFFER * Float32Array.BYTES_PER_ELEMENT;
+const BYTES_PER_WORM_COLOR = BYTES_PER_WORM_VEC4_BUFFER;
+const FLOATS_PER_WORM_SEGMENT_POSITION = 2;
+const BYTES_PER_WORM_SEGMENT_POSITION = FLOATS_PER_WORM_SEGMENT_POSITION * Float32Array.BYTES_PER_ELEMENT;
 const BYTES_PER_RANDOM_STATE = Uint32Array.BYTES_PER_ELEMENT;
-const COMPUTE_VERTEX_STRIDE = 32;
+const RENDER_INFO_FLOATS = 4;
 let webgpuContextPromise: Promise<{ adapter: GPUAdapter; device: GPUDevice }> | null = null;
 
-function createWebgpuPresenter(device: GPUDevice, format: GPUTextureFormat, shaderSource: string) {
-  const shader = device.createShaderModule({
-    code: shaderSource
-  });
-  const pipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      module: shader,
-      entryPoint: "vertexMain"
-    },
-    fragment: {
-      module: shader,
-      entryPoint: "fragmentMain",
-      targets: [{ format }]
-    },
-    primitive: {
-      topology: "triangle-list"
-    }
-  });
-  const sampler = device.createSampler({
-    magFilter: "nearest",
-    minFilter: "nearest"
-  });
-  return {
-    pipeline,
-    sampler
-  };
+export async function getMaxSupportedWormCountForTailSegments(tailSegmentCount: number) {
+  const { device } = await getWebgpuContext();
+  return getMaxSupportedWormCountForTailSegmentsFromLimits(device, tailSegmentCount);
+}
+
+export function getMaxSupportedWormCountForTailSegmentsFromLimits(
+  gpuLimitsSource: { limits: GPUSupportedLimits },
+  tailSegmentCount: number
+) {
+  const segmentNodeCount = getSegmentNodeCount(tailSegmentCount);
+  const perWormLargestBufferByteSize = Math.max(
+    segmentNodeCount * BYTES_PER_WORM_SEGMENT_POSITION,
+    BYTES_PER_WORM_VEC4_BUFFER,
+    BYTES_PER_WORM_COLOR,
+    BYTES_PER_RANDOM_STATE
+  );
+  const storageLimit = gpuLimitsSource.limits.maxStorageBufferBindingSize;
+  const bufferLimit = gpuLimitsSource.limits.maxBufferSize;
+  return Math.max(1, Math.floor(Math.min(storageLimit, bufferLimit) / perWormLargestBufferByteSize));
 }
 
 export async function createWebgpuComputeRenderer(
@@ -77,17 +72,21 @@ export async function createWebgpuComputeRenderer(
   height: number,
   renderWidth: number,
   renderHeight: number,
-  wormCount: number
+  wormCount: number,
+  tailSegmentCount: number
 ) {
   const { device } = await getWebgpuContext();
   const context = canvas.getContext("webgpu")!;
   const format = navigator.gpu.getPreferredCanvasFormat();
-  const maxSupportedWormCount = getMaxSupportedWormCount(device, COMPUTE_VERTEX_STRIDE);
+  const normalizedTailSegmentCount = clampTailSegmentCount(tailSegmentCount);
+  const segmentNodeCount = getSegmentNodeCount(normalizedTailSegmentCount);
+  const maxSupportedWormCount = getMaxSupportedWormCountForTailSegmentsFromLimits(device, normalizedTailSegmentCount);
   if (wormCount > maxSupportedWormCount) {
     throw new Error(`WebGPU limit reached. Try ${maxSupportedWormCount.toLocaleString()} worms or fewer.`);
   }
+
   const capacityWormCount = getWormCapacity(wormCount, maxSupportedWormCount);
-  const wormResources = createWormResources(device, capacityWormCount);
+  const wormResources = createWormResources(device, capacityWormCount, segmentNodeCount);
   const appleData = new Float32Array(MAX_APPLES * FLOATS_PER_APPLE);
   const appleMarkerData = new Float32Array(MAX_APPLES * VERTICES_PER_APPLE_MARKER * FLOATS_PER_MARKER_VERTEX);
   const appleEaterClearData = new Uint32Array(MAX_APPLES);
@@ -104,13 +103,14 @@ export async function createWebgpuComputeRenderer(
   const computeShader = device.createShaderModule({ code: computeShaderSource });
   const appleShader = device.createShaderModule({ code: appleShaderSource });
   const lineShader = device.createShaderModule({ code: lineShaderSource });
-  const fadeShader = device.createShaderModule({ code: fadeShaderSource });
-  const updateWormStateAndWriteLineVerticesPipeline = createComputePipeline(device, computeShader, "computeMain");
+  const wormShader = device.createShaderModule({ code: wormShaderSource });
+  const updateWormStatePipeline = createComputePipeline(device, computeShader, "computeMain");
   const initializeWormStateRangePipeline = createComputePipeline(device, computeShader, "initMain");
   const updateAppleStateAndWriteAppleShapeVerticesPipeline = createComputePipeline(device, appleShader, "computeMain");
   const placeQueuedApplesPipeline = createComputePipeline(device, appleShader, "placementMain");
+  const drawWormSegmentsPipeline = createLinePipeline(device, format, wormShader, "vertexMain");
   const drawBufferedLineVerticesPipeline = createLinePipeline(device, format, lineShader, "vertexMain", [{
-    arrayStride: COMPUTE_VERTEX_STRIDE,
+    arrayStride: 32,
     attributes: [
       {
         shaderLocation: 0,
@@ -124,35 +124,6 @@ export async function createWebgpuComputeRenderer(
       }
     ]
   }]);
-  const fadeTrailImagePipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      module: fadeShader,
-      entryPoint: "vertexMain"
-    },
-    fragment: {
-      module: fadeShader,
-      entryPoint: "fragmentMain",
-      targets: [{
-        format,
-        blend: {
-          color: {
-            srcFactor: "src-alpha",
-            dstFactor: "one-minus-src-alpha",
-            operation: "add"
-          },
-          alpha: {
-            srcFactor: "one",
-            dstFactor: "zero",
-            operation: "add"
-          }
-        }
-      }]
-    },
-    primitive: {
-      topology: "triangle-list"
-    }
-  });
   const drawApplePreviewRingsPipeline = createLinePipeline(device, format, lineShader, "previewVertexMain");
   const appleBuffer = device.createBuffer({
     size: appleData.byteLength,
@@ -182,11 +153,17 @@ export async function createWebgpuComputeRenderer(
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
   const paramsBuffer = createUniformBuffer(device, 80);
-  const resolutionBuffer = createUniformBuffer(device, 8);
-  const fadeBuffer = createUniformBuffer(device, 4);
-  const presenter = createWebgpuPresenter(device, format, presentShaderSource);
-  const computeBindGroup = createComputeBindGroup(device, updateWormStateAndWriteLineVerticesPipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer);
+  const renderInfoBuffer = createUniformBuffer(device, RENDER_INFO_FLOATS * Float32Array.BYTES_PER_ELEMENT);
+  const computeBindGroup = createComputeBindGroup(device, updateWormStatePipeline, wormResources, paramsBuffer, appleBuffer, appleEaterBuffer);
   const initBindGroup = createInitBindGroup(device, initializeWormStateRangePipeline, wormResources, paramsBuffer);
+  const wormBindGroup = device.createBindGroup({
+    layout: drawWormSegmentsPipeline.getBindGroupLayout(0),
+    entries: [
+      bufferBinding(0, wormResources.segmentPositionBuffer),
+      bufferBinding(1, wormResources.colorBuffer),
+      bufferBinding(2, renderInfoBuffer)
+    ]
+  });
   const appleBindGroup = device.createBindGroup({
     layout: updateAppleStateAndWriteAppleShapeVerticesPipeline.getBindGroupLayout(0),
     entries: [
@@ -211,16 +188,12 @@ export async function createWebgpuComputeRenderer(
   });
   const lineBindGroup = device.createBindGroup({
     layout: drawBufferedLineVerticesPipeline.getBindGroupLayout(0),
-    entries: [bufferBinding(0, resolutionBuffer)]
-  });
-  const fadeBindGroup = device.createBindGroup({
-    layout: fadeTrailImagePipeline.getBindGroupLayout(0),
-    entries: [bufferBinding(0, fadeBuffer)]
+    entries: [bufferBinding(0, renderInfoBuffer)]
   });
   const previewBindGroup = device.createBindGroup({
     layout: drawApplePreviewRingsPipeline.getBindGroupLayout(0),
     entries: [
-      bufferBinding(0, resolutionBuffer),
+      bufferBinding(0, renderInfoBuffer),
       bufferBinding(1, applePreviewBuffer)
     ]
   });
@@ -235,28 +208,30 @@ export async function createWebgpuComputeRenderer(
     renderHeight = 0;
     wormCount = wormCount;
     capacityWormCount = capacityWormCount;
+    tailSegmentCount = normalizedTailSegmentCount;
+    segmentNodeCount = segmentNodeCount;
     maxSupportedWormCount = maxSupportedWormCount;
     wormResources = wormResources;
-    updateWormStateAndWriteLineVerticesPipeline = updateWormStateAndWriteLineVerticesPipeline;
+    updateWormStatePipeline = updateWormStatePipeline;
     initializeWormStateRangePipeline = initializeWormStateRangePipeline;
     updateAppleStateAndWriteAppleShapeVerticesPipeline = updateAppleStateAndWriteAppleShapeVerticesPipeline;
     placeQueuedApplesPipeline = placeQueuedApplesPipeline;
+    drawWormSegmentsPipeline = drawWormSegmentsPipeline;
     drawBufferedLineVerticesPipeline = drawBufferedLineVerticesPipeline;
-    fadeTrailImagePipeline = fadeTrailImagePipeline;
     drawApplePreviewRingsPipeline = drawApplePreviewRingsPipeline;
     computeBindGroup = computeBindGroup;
     initBindGroup = initBindGroup;
+    wormBindGroup = wormBindGroup;
     appleBindGroup = appleBindGroup;
     applePlacementBindGroup = applePlacementBindGroup;
     lineBindGroup = lineBindGroup;
-    fadeBindGroup = fadeBindGroup;
     previewBindGroup = previewBindGroup;
-    vertexBuffer = wormResources.vertexBuffer;
-    positionBuffer = wormResources.positionBuffer;
+    segmentPositionBuffer = wormResources.segmentPositionBuffer;
     motionABuffer = wormResources.motionABuffer;
     motionBBuffer = wormResources.motionBBuffer;
     motionCBuffer = wormResources.motionCBuffer;
     randomBuffer = wormResources.randomBuffer;
+    colorBuffer = wormResources.colorBuffer;
     appleBuffer = appleBuffer;
     appleEaterBuffer = appleEaterBuffer;
     appleFreeSlotBuffer = appleFreeSlotBuffer;
@@ -281,15 +256,9 @@ export async function createWebgpuComputeRenderer(
     appleSnapshotPending = false;
     appleSnapshotHandler: ((snapshot: Float32Array) => void) | null = null;
     paramsBuffer = paramsBuffer;
-    resolutionBuffer = resolutionBuffer;
-    fadeBuffer = fadeBuffer;
+    renderInfoBuffer = renderInfoBuffer;
     paramsData = new Float32Array(20);
-    fadeData = new Float32Array(1);
-    copyTrailImageToCanvasPipeline = presenter.pipeline;
-    presentSampler = presenter.sampler;
-    presentBindGroup!: GPUBindGroup;
-    trailTexture: GPUTexture | null = null;
-    trailView!: GPUTextureView;
+    renderInfoData = new Float32Array(RENDER_INFO_FLOATS);
 
     resize(nextWidth: number, nextHeight: number, nextRenderWidth: number, nextRenderHeight: number) {
       this.width = nextWidth;
@@ -303,9 +272,16 @@ export async function createWebgpuComputeRenderer(
         format: this.format,
         alphaMode: "opaque"
       });
-      this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
-      this.createTrailTexture();
+      this.writeRenderInfo();
       this.clear();
+    }
+
+    writeRenderInfo() {
+      this.renderInfoData[0] = this.width;
+      this.renderInfoData[1] = this.height;
+      this.renderInfoData[2] = this.tailSegmentCount;
+      this.renderInfoData[3] = this.segmentNodeCount;
+      this.device.queue.writeBuffer(this.renderInfoBuffer, 0, this.renderInfoData);
     }
 
     setWormCount(nextWormCount: number) {
@@ -329,32 +305,83 @@ export async function createWebgpuComputeRenderer(
     growWormCapacity(nextWormCount: number) {
       const previousResources = this.wormResources;
       const nextCapacity = getWormCapacity(nextWormCount, this.maxSupportedWormCount);
-      const nextResources = createWormResources(this.device, nextCapacity);
+      const nextResources = createWormResources(this.device, nextCapacity, this.segmentNodeCount);
       const encoder = this.device.createCommandEncoder();
-      copyWormBufferRange(encoder, previousResources.positionBuffer, nextResources.positionBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
-      copyWormBufferRange(encoder, previousResources.motionABuffer, nextResources.motionABuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
-      copyWormBufferRange(encoder, previousResources.motionBBuffer, nextResources.motionBBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
-      copyWormBufferRange(encoder, previousResources.motionCBuffer, nextResources.motionCBuffer, this.wormCount * BYTES_PER_WORM_VEC4_BUFFER);
-      copyWormBufferRange(encoder, previousResources.randomBuffer, nextResources.randomBuffer, this.wormCount * BYTES_PER_RANDOM_STATE);
+      copyWormBufferRange(
+        encoder,
+        previousResources.segmentPositionBuffer,
+        nextResources.segmentPositionBuffer,
+        this.wormCount * this.segmentNodeCount * BYTES_PER_WORM_SEGMENT_POSITION
+      );
+      copyWormBufferRange(
+        encoder,
+        previousResources.motionABuffer,
+        nextResources.motionABuffer,
+        this.wormCount * BYTES_PER_WORM_VEC4_BUFFER
+      );
+      copyWormBufferRange(
+        encoder,
+        previousResources.motionBBuffer,
+        nextResources.motionBBuffer,
+        this.wormCount * BYTES_PER_WORM_VEC4_BUFFER
+      );
+      copyWormBufferRange(
+        encoder,
+        previousResources.motionCBuffer,
+        nextResources.motionCBuffer,
+        this.wormCount * BYTES_PER_WORM_VEC4_BUFFER
+      );
+      copyWormBufferRange(
+        encoder,
+        previousResources.randomBuffer,
+        nextResources.randomBuffer,
+        this.wormCount * BYTES_PER_RANDOM_STATE
+      );
+      copyWormBufferRange(
+        encoder,
+        previousResources.colorBuffer,
+        nextResources.colorBuffer,
+        this.wormCount * BYTES_PER_WORM_COLOR
+      );
       this.device.queue.submit([encoder.finish()]);
 
       this.wormResources = nextResources;
       this.capacityWormCount = nextCapacity;
-      this.positionBuffer = nextResources.positionBuffer;
+      this.segmentPositionBuffer = nextResources.segmentPositionBuffer;
       this.motionABuffer = nextResources.motionABuffer;
       this.motionBBuffer = nextResources.motionBBuffer;
       this.motionCBuffer = nextResources.motionCBuffer;
       this.randomBuffer = nextResources.randomBuffer;
-      this.vertexBuffer = nextResources.vertexBuffer;
-      this.computeBindGroup = createComputeBindGroup(this.device, this.updateWormStateAndWriteLineVerticesPipeline, nextResources, this.paramsBuffer, this.appleBuffer, this.appleEaterBuffer);
-      this.initBindGroup = createInitBindGroup(this.device, this.initializeWormStateRangePipeline, nextResources, this.paramsBuffer);
+      this.colorBuffer = nextResources.colorBuffer;
+      this.computeBindGroup = createComputeBindGroup(
+        this.device,
+        this.updateWormStatePipeline,
+        nextResources,
+        this.paramsBuffer,
+        this.appleBuffer,
+        this.appleEaterBuffer
+      );
+      this.initBindGroup = createInitBindGroup(
+        this.device,
+        this.initializeWormStateRangePipeline,
+        nextResources,
+        this.paramsBuffer
+      );
+      this.wormBindGroup = this.device.createBindGroup({
+        layout: this.drawWormSegmentsPipeline.getBindGroupLayout(0),
+        entries: [
+          bufferBinding(0, nextResources.segmentPositionBuffer),
+          bufferBinding(1, nextResources.colorBuffer),
+          bufferBinding(2, this.renderInfoBuffer)
+        ]
+      });
 
-      previousResources.positionBuffer.destroy();
+      previousResources.segmentPositionBuffer.destroy();
       previousResources.motionABuffer.destroy();
       previousResources.motionBBuffer.destroy();
       previousResources.motionCBuffer.destroy();
       previousResources.randomBuffer.destroy();
-      previousResources.vertexBuffer.destroy();
+      previousResources.colorBuffer.destroy();
     }
 
     initWormRange(startIndex: number, endIndex: number) {
@@ -377,8 +404,8 @@ export async function createWebgpuComputeRenderer(
         0,
         startIndex,
         endIndex,
-        0,
-        0,
+        this.segmentNodeCount,
+        WORM_SEGMENT_SPACING,
         0,
         0,
         0,
@@ -386,21 +413,24 @@ export async function createWebgpuComputeRenderer(
       ]);
       this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
       const encoder = this.device.createCommandEncoder();
-      runComputePass(encoder, this.initializeWormStateRangePipeline, this.initBindGroup, Math.ceil((endIndex - startIndex) / 256));
+      runComputePass(
+        encoder,
+        this.initializeWormStateRangePipeline,
+        this.initBindGroup,
+        Math.ceil((endIndex - startIndex) / 256)
+      );
       this.device.queue.submit([encoder.finish()]);
     }
 
     clear() {
       const encoder = this.device.createCommandEncoder();
-      const pass = beginRenderPass(encoder, this.trailView, "clear");
+      const pass = beginRenderPass(encoder, this.context.getCurrentTexture().createView(), "clear");
       pass.end();
-      this.presentTrail(encoder);
       this.device.queue.submit([encoder.finish()]);
     }
 
     drawFrame(
       elapsedMs: number,
-      fadeAmount: number | null,
       appleBitePercentPerSecond: number,
       craziness: number,
       speed: number,
@@ -417,6 +447,7 @@ export async function createWebgpuComputeRenderer(
           this.applePlacementData.subarray(0, applePlacementCount * FLOATS_PER_APPLE)
         );
       }
+
       const hasAppleWork = hasActiveApples || applePlacementCount > 0;
       const activeAppleSlotCount = hasAppleWork ? this.appleSlotCount : 0;
       this.paramsData[0] = this.width;
@@ -433,48 +464,41 @@ export async function createWebgpuComputeRenderer(
       this.paramsData[11] = craziness;
       this.paramsData[12] = applePlacementCount;
       this.paramsData[13] = speed;
-      this.paramsData[14] = cursorRepellentActive;
-      this.paramsData[15] = 0;
+      this.paramsData[14] = this.segmentNodeCount;
+      this.paramsData[15] = WORM_SEGMENT_SPACING;
       this.paramsData[16] = cursorRepellentX;
       this.paramsData[17] = cursorRepellentY;
       this.paramsData[18] = cursorRepellentActive;
       this.paramsData[19] = REPELLENT_RADIUS;
       this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
 
-      if (fadeAmount !== null) {
-        this.fadeData[0] = Math.max(0, Math.min(1, 1 - fadeAmount));
-        this.device.queue.writeBuffer(this.fadeBuffer, 0, this.fadeData);
-      }
       const encoder = this.device.createCommandEncoder();
-      if (fadeAmount !== null) {
-        const fadePass = beginRenderPass(encoder, this.trailView);
-        fadePass.setPipeline(this.fadeTrailImagePipeline);
-        fadePass.setBindGroup(0, this.fadeBindGroup);
-        fadePass.draw(6);
-        fadePass.end();
-      }
-
-      runComputePass(encoder, this.updateWormStateAndWriteLineVerticesPipeline, this.computeBindGroup, Math.ceil(this.wormCount / 256));
+      runComputePass(encoder, this.updateWormStatePipeline, this.computeBindGroup, Math.ceil(this.wormCount / 256));
       if (hasAppleWork) {
-        runComputePass(encoder, this.updateAppleStateAndWriteAppleShapeVerticesPipeline, this.appleBindGroup, Math.ceil(this.appleSlotCount / 64));
+        runComputePass(
+          encoder,
+          this.updateAppleStateAndWriteAppleShapeVerticesPipeline,
+          this.appleBindGroup,
+          Math.ceil(this.appleSlotCount / 64)
+        );
       }
 
       if (applePlacementCount > 0) {
         runComputePass(encoder, this.placeQueuedApplesPipeline, this.applePlacementBindGroup, 1);
       }
 
-      const linePass = beginRenderPass(encoder, this.trailView);
-      linePass.setPipeline(this.drawBufferedLineVerticesPipeline);
-      linePass.setBindGroup(0, this.lineBindGroup);
-      linePass.setVertexBuffer(0, this.vertexBuffer);
-      linePass.draw(this.wormCount * VERTICES_PER_WORM);
-      linePass.end();
       const shouldReadApples = this.appleSnapshotHandler !== null && !this.appleSnapshotPending;
       if (shouldReadApples) {
         encoder.copyBufferToBuffer(this.appleBuffer, 0, this.appleReadbackBuffer, 0, this.appleData.byteLength);
       }
+
       const targetView = this.context.getCurrentTexture().createView();
-      this.presentTrail(encoder, targetView);
+      const wormPass = beginRenderPass(encoder, targetView, "clear");
+      wormPass.setPipeline(this.drawWormSegmentsPipeline);
+      wormPass.setBindGroup(0, this.wormBindGroup);
+      wormPass.draw(this.wormCount * this.tailSegmentCount * 2);
+      wormPass.end();
+
       if (hasAppleWork) {
         this.drawAppleOverlay(encoder, targetView);
       }
@@ -537,40 +561,6 @@ export async function createWebgpuComputeRenderer(
         return;
       }
       this.appleSnapshotHandler = handler;
-    }
-
-    createTrailTexture() {
-      if (this.trailTexture !== null) {
-        this.trailTexture.destroy();
-      }
-      this.trailTexture = this.device.createTexture({
-        size: [this.renderWidth, this.renderHeight],
-        format: this.format,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-      });
-      this.trailView = this.trailTexture.createView();
-      this.presentBindGroup = this.device.createBindGroup({
-        layout: this.copyTrailImageToCanvasPipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.presentSampler
-          },
-          {
-            binding: 1,
-            resource: this.trailView
-          }
-        ]
-      });
-    }
-
-    presentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
-      const view = targetView ?? this.context.getCurrentTexture().createView();
-      const pass = beginRenderPass(encoder, view, "clear");
-      pass.setPipeline(this.copyTrailImageToCanvasPipeline);
-      pass.setBindGroup(0, this.presentBindGroup);
-      pass.draw(6);
-      pass.end();
     }
 
     drawAppleOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
@@ -647,7 +637,7 @@ async function getWebgpuContext() {
     throw new Error("WebGPU unavailable in this browser.");
   }
 
-  webgpuContextPromise = navigator.gpu.requestAdapter().then(async (adapter) => {
+  webgpuContextPromise = navigator.gpu.requestAdapter().then(async adapter => {
     if (adapter === null) {
       throw new Error("WebGPU adapter unavailable.");
     }
@@ -658,6 +648,14 @@ async function getWebgpuContext() {
     };
   });
   return webgpuContextPromise;
+}
+
+function clampTailSegmentCount(tailSegmentCount: number) {
+  return Math.round(Math.min(MAX_TAIL_SEGMENTS, Math.max(MIN_TAIL_SEGMENTS, tailSegmentCount)));
+}
+
+function getSegmentNodeCount(tailSegmentCount: number) {
+  return clampTailSegmentCount(tailSegmentCount) + 1;
 }
 
 function createStorageBuffer(device: GPUDevice, data: BufferSource) {
@@ -767,7 +765,6 @@ function writeRepellentMarkerVertices(data: Float32Array, baseOffset: number, ce
       0.78
     );
   }
-
 }
 
 function writeMarkerVertex(
@@ -789,17 +786,14 @@ function writeMarkerVertex(
   return offset + FLOATS_PER_MARKER_VERTEX;
 }
 
-function createWormResources(device: GPUDevice, capacityWormCount: number) {
+function createWormResources(device: GPUDevice, capacityWormCount: number, segmentNodeCount: number) {
   return {
-    positionBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
+    segmentPositionBuffer: createEmptyStorageBuffer(device, capacityWormCount * segmentNodeCount * BYTES_PER_WORM_SEGMENT_POSITION),
     motionABuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
     motionBBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
     motionCBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
     randomBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_RANDOM_STATE),
-    vertexBuffer: device.createBuffer({
-      size: capacityWormCount * VERTICES_PER_WORM * COMPUTE_VERTEX_STRIDE,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
-    })
+    colorBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_COLOR)
   };
 }
 
@@ -819,11 +813,12 @@ function createInitBindGroup(
   return device.createBindGroup({
     layout: initializeWormStateRangePipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: wormResources.positionBuffer } },
+      { binding: 0, resource: { buffer: wormResources.segmentPositionBuffer } },
       { binding: 1, resource: { buffer: wormResources.motionABuffer } },
       { binding: 2, resource: { buffer: wormResources.motionBBuffer } },
       { binding: 3, resource: { buffer: wormResources.motionCBuffer } },
       { binding: 4, resource: { buffer: wormResources.randomBuffer } },
+      { binding: 5, resource: { buffer: wormResources.colorBuffer } },
       { binding: 6, resource: { buffer: paramsBuffer } }
     ]
   });
@@ -831,21 +826,21 @@ function createInitBindGroup(
 
 function createComputeBindGroup(
   device: GPUDevice,
-  updateWormStateAndWriteLineVerticesPipeline: GPUComputePipeline,
+  updateWormStatePipeline: GPUComputePipeline,
   wormResources: ReturnType<typeof createWormResources>,
   paramsBuffer: GPUBuffer,
   appleBuffer: GPUBuffer,
   appleEaterBuffer: GPUBuffer
 ) {
   return device.createBindGroup({
-    layout: updateWormStateAndWriteLineVerticesPipeline.getBindGroupLayout(0),
+    layout: updateWormStatePipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: wormResources.positionBuffer } },
+      { binding: 0, resource: { buffer: wormResources.segmentPositionBuffer } },
       { binding: 1, resource: { buffer: wormResources.motionABuffer } },
       { binding: 2, resource: { buffer: wormResources.motionBBuffer } },
       { binding: 3, resource: { buffer: wormResources.motionCBuffer } },
       { binding: 4, resource: { buffer: wormResources.randomBuffer } },
-      { binding: 5, resource: { buffer: wormResources.vertexBuffer } },
+      { binding: 5, resource: { buffer: wormResources.colorBuffer } },
       { binding: 6, resource: { buffer: paramsBuffer } },
       { binding: 7, resource: { buffer: appleBuffer } },
       { binding: 8, resource: { buffer: appleEaterBuffer } }
@@ -857,13 +852,6 @@ function copyWormBufferRange(encoder: GPUCommandEncoder, sourceBuffer: GPUBuffer
   if (byteLength > 0) {
     encoder.copyBufferToBuffer(sourceBuffer, 0, destinationBuffer, 0, byteLength);
   }
-}
-
-function getMaxSupportedWormCount(gpuLimitsSource: { limits: GPUSupportedLimits }, computeVertexStride = 32) {
-  const lineBytesPerWorm = VERTICES_PER_WORM * computeVertexStride;
-  const storageLimit = gpuLimitsSource.limits.maxStorageBufferBindingSize;
-  const bufferLimit = gpuLimitsSource.limits.maxBufferSize;
-  return Math.max(1, Math.floor(Math.min(storageLimit, bufferLimit) / lineBytesPerWorm));
 }
 
 function getWormCapacity(wormCount: number, maxSupportedWormCount: number) {
