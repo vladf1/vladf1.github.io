@@ -34,18 +34,10 @@ fn vertexMain(
   let canvasPosition = select(startPosition, endPosition, endpointIndex == 1u);
   let baseColor = colors[wormIndex];
 
-  var segmentT = 0.0;
-  if (segmentCount > 1u) {
-    let normalizedSegment = f32(segmentIndex) / f32(segmentCount - 1u);
-    segmentT = clamp(normalizedSegment, 0.0, 1.0);
-  }
-
+  let fadeDenominator = f32(max(1u, segmentCount - 1u));
+  let segmentT = f32(segmentIndex) / fadeDenominator;
   let fadeBase = 1.0 - segmentT;
-  var fade = 0.0;
-  if (fadeBase > 0.0) {
-    fade = pow(fadeBase, 1.28);
-  }
-
+  let fade = fadeBase * sqrt(sqrt(fadeBase));
   let intensity = 0.12 + 0.88 * fade;
   let alpha = baseColor.a * (0.08 + 0.92 * fade);
 
