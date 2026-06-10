@@ -116,7 +116,6 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let height = params.canvasWormsApples.y;
   let appleCount = u32(params.canvasWormsApples.w);
   let elapsedMs = params.elapsedDistances.x;
-  let speedScale = params.reserved.y;
   let segmentNodeCount = max(2u, u32(params.reserved.z));
   let segmentSpacing = params.reserved.w;
   let appleTurnMs = params.turn.x;
@@ -252,7 +251,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft -= elapsedMs;
   }
 
-  var nextHeadPosition = headPosition + velocity * elapsedMs * speedScale;
+  var nextHeadPosition = headPosition + velocity * elapsedMs;
   var bounced = false;
 
   if (nextHeadPosition.y < 0.0) {
@@ -276,7 +275,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   }
 
   if (bounced) {
-    nextHeadPosition = headPosition + velocity * elapsedMs * speedScale;
+    nextHeadPosition = headPosition + velocity * elapsedMs;
     angle = atan2(velocity.y, velocity.x);
     angleChangeMsLeft = 0.0;
   }

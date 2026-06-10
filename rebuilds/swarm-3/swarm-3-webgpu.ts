@@ -454,7 +454,7 @@ export async function createWebgpuComputeRenderer(
       this.paramsData[1] = this.height;
       this.paramsData[2] = this.wormCount;
       this.paramsData[3] = activeAppleSlotCount;
-      this.paramsData[4] = elapsedMs;
+      this.paramsData[4] = elapsedMs * speed;
       this.paramsData[5] = appleBitePercentPerSecond;
       this.paramsData[6] = APPLE_MIN_ACTIVE_RADIUS;
       this.paramsData[7] = APPLE_MAX_RADIUS;
@@ -463,7 +463,7 @@ export async function createWebgpuComputeRenderer(
       this.paramsData[10] = WORM_MAX_RANDOM_ANGLE_CHANGE;
       this.paramsData[11] = craziness;
       this.paramsData[12] = applePlacementCount;
-      this.paramsData[13] = speed;
+      this.paramsData[13] = 1;
       this.paramsData[14] = this.segmentNodeCount;
       this.paramsData[15] = WORM_SEGMENT_SPACING;
       this.paramsData[16] = cursorRepellentX;
