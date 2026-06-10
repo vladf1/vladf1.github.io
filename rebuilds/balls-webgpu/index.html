@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Balls on WebGPU</title>
+    <script type="module" src="./balls-webgpu.ts"></script>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: black;
+            color: white;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: black;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #statusBar {
+            position: fixed;
+            left: 8px;
+            top: 8px;
+            z-index: 2;
+            color: white;
+            font: 14px/1.3 Arial, Helvetica, sans-serif;
+            pointer-events: none;
+            text-shadow: 0 1px 3px black;
+        }
+
+        #controls {
+            position: fixed;
+            left: 50%;
+            bottom: max(14px, env(safe-area-inset-bottom));
+            z-index: 3;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: max-content;
+            max-width: calc(100vw - 28px);
+            padding: 8px 10px;
+            transform: translateX(-50%);
+            box-sizing: border-box;
+            color: #eeeeee;
+            background: rgb(18 20 24 / 86%);
+            border: 1px solid rgb(255 255 255 / 20%);
+            border-radius: 8px;
+            box-shadow:
+                0 16px 42px rgb(0 0 0 / 50%),
+                inset 0 1px 0 rgb(255 255 255 / 8%);
+            backdrop-filter: blur(12px);
+            font: 13px/1.2 Arial, Helvetica, sans-serif;
+            user-select: none;
+        }
+
+        .control-field {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .control-field span {
+            color: #d2d2d2;
+            font-weight: 700;
+        }
+
+        .control-field input:focus-visible {
+            outline: 2px solid #f4ff28;
+            outline-offset: 2px;
+        }
+
+        .control-field input[type="range"] {
+            width: 150px;
+            accent-color: #f4ff28;
+        }
+
+        .control-value {
+            min-width: 40px;
+            color: #eeeeee;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
+
+        .control-field input[type="number"] {
+            width: 72px;
+            padding: 7px 8px;
+            color: #eeeeee;
+            background: rgb(0 0 0 / 38%);
+            border: 1px solid rgb(255 255 255 / 28%);
+            border-radius: 6px;
+            font: inherit;
+        }
+
+        .control-step {
+            display: grid;
+            place-items: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            color: #eeeeee;
+            background: rgb(0 0 0 / 38%);
+            border: 1px solid rgb(255 255 255 / 28%);
+            border-radius: 6px;
+            font: 700 17px/1 Arial, Helvetica, sans-serif;
+            cursor: pointer;
+        }
+
+        .control-step:hover {
+            border-color: rgb(244 255 40 / 62%);
+            background: rgb(244 255 40 / 14%);
+        }
+
+        .control-step:focus-visible {
+            outline: 2px solid #f4ff28;
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 520px) {
+            #controls {
+                width: calc(100vw - 28px);
+            }
+
+            .control-field input[type="range"] {
+                width: min(150px, 38vw);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas">
+        Your browser does not support the CANVAS tag. Sorry! Please use Firefox or Chrome or Safari or Opera or IE 9.
+    </canvas>
+    <div id="statusBar">Bouncing balls on WebGPU. TypeScript, no external libraries.</div>
+    <div id="controls">
+        <label class="control-field">
+            <span>Balls</span>
+            <input id="ballCountRange" type="range" min="1" max="500" step="1">
+            <input id="ballCountInput" type="number" min="1" max="500" step="1">
+        </label>
+        <label class="control-field">
+            <span>Size</span>
+            <button id="decreaseBallSize" class="control-step" type="button" aria-label="Decrease ball size">-</button>
+            <input id="ballSizeRange" type="range" min="0.02" max="2" step="0.01">
+            <button id="increaseBallSize" class="control-step" type="button" aria-label="Increase ball size">+</button>
+            <output id="ballSizeValue" class="control-value"></output>
+        </label>
+    </div>
+</body>
+</html>

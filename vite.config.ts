@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: "index.html",
         balls: "canvas-experiments/balls/index.html",
+        ballsWebgpu: "rebuilds/balls-webgpu/index.html",
         clickMe: "canvas-experiments/click-me/index.html",
         jsFireworks: "canvas-experiments/js-fireworks/index.html",
         shootThemDown: "canvas-experiments/shoot-them-down/index.html",
