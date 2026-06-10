@@ -7,14 +7,19 @@ const context = canvas.getContext("2d");
 let hint = document.querySelector("#hint");
 let lastTime = performance.now();
 let dots = [];
+let canvasWidth = 0;
+let canvasHeight = 0;
 
 const randomBetween = (min, max) => min + (max - min) * Math.random();
 
 function resizeCanvas() {
   const scale = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(innerWidth * scale);
-  canvas.height = Math.floor(innerHeight * scale);
-  context.setTransform(scale, 0, 0, scale, 0, 0);
+  const bounds = canvas.getBoundingClientRect();
+  canvasWidth = bounds.width;
+  canvasHeight = bounds.height;
+  canvas.width = Math.floor(canvasWidth * scale);
+  canvas.height = Math.floor(canvasHeight * scale);
+  context.setTransform(canvas.width / canvasWidth, 0, 0, canvas.height / canvasHeight, 0, 0);
 }
 
 resizeCanvas();
@@ -28,7 +33,7 @@ function addDots(x, y, dotCount) {
     dots.push({
       x,
       y,
-      size: randomBetween(1, 3),
+      size: randomBetween(1.5, 4.5),
       color: `rgb(${randomBetween(128, 256)} ${randomBetween(128, 256)} ${randomBetween(128, 256)})`,
       xVelocity: randomBetween(-0.12, 0.12),
       yVelocity: randomBetween(-0.12, 0),
@@ -44,7 +49,7 @@ requestAnimationFrame(function animate(time) {
   const elapsed = time - lastTime;
   lastTime = time;
 
-  context.clearRect(0, 0, innerWidth, innerHeight);
+  context.clearRect(0, 0, canvasWidth, canvasHeight);
 
   for (const dot of dots) {
     dot.opacity -= 0.00036 * elapsed;
