@@ -1,3 +1,4 @@
+const PI = 3.141592653589793;
 const TWO_PI = 6.283185307179586;
 const WORKGROUP_SIZE = 256u;
 const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
@@ -10,23 +11,18 @@ struct SimParams {
   cursorRepellent: vec4f,
 };
 
-struct LineVertex {
-  position: vec2f,
-  color: vec4f,
-};
-
 struct Apple {
   position: vec2f,
   volume: f32,
   radius: f32,
 };
 
-@group(0) @binding(0) var<storage, read_write> positions: array<vec4f>;
+@group(0) @binding(0) var<storage, read_write> segmentPositions: array<vec2f>;
 @group(0) @binding(1) var<storage, read_write> motionA: array<vec4f>;
 @group(0) @binding(2) var<storage, read_write> motionB: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> motionC: array<vec4f>;
 @group(0) @binding(4) var<storage, read_write> randomStates: array<u32>;
-@group(0) @binding(5) var<storage, read_write> vertices: array<LineVertex>;
+@group(0) @binding(5) var<storage, read_write> colors: array<vec4f>;
 @group(0) @binding(6) var<uniform> params: SimParams;
 @group(0) @binding(7) var<storage, read> apples: array<Apple>;
 @group(0) @binding(8) var<storage, read_write> appleEaters: array<atomic<u32>>;
@@ -57,19 +53,25 @@ fn wormColor(index: u32) -> vec4f {
 
 fn angleDifference(targetAngle: f32, currentAngle: f32) -> f32 {
   let difference = targetAngle - currentAngle;
-  if (difference > 3.141592653589793) {
+  if (difference > PI) {
     return difference - TWO_PI;
   }
-  if (difference < -3.141592653589793) {
+  if (difference < -PI) {
     return difference + TWO_PI;
   }
   return difference;
+}
+
+fn clampToCanvas(position: vec2f, width: f32, height: f32) -> vec2f {
+  return clamp(position, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn initMain(@builtin(global_invocation_id) id: vec3u) {
   let initStart = u32(params.reserved.x);
   let initEnd = u32(params.reserved.y);
+  let segmentNodeCount = max(2u, u32(params.reserved.z));
+  let segmentSpacing = params.reserved.w;
   let index = initStart + id.x;
   if (index >= initEnd) {
     return;
@@ -87,11 +89,19 @@ fn initMain(@builtin(global_invocation_id) id: vec3u) {
   let offsetY = randomBetween(index, -10.0, 10.0);
   let angle = randomBetween(index, 0.0, TWO_PI);
   let velocity = vec2f(speed * cos(angle), speed * sin(angle));
+  let tailDirection = -normalize(velocity);
+  let startPosition = vec2f(startX, startY);
+  let baseIndex = index * segmentNodeCount;
 
-  positions[index] = vec4f(startX, startY, startX, startY);
+  for (var segmentIndex = 0u; segmentIndex < segmentNodeCount; segmentIndex++) {
+    let segmentPosition = startPosition + tailDirection * segmentSpacing * f32(segmentIndex);
+    segmentPositions[baseIndex + segmentIndex] = clampToCanvas(segmentPosition, width, height);
+  }
+
   motionA[index] = vec4f(velocity, speed, crazinessPerMs);
   motionB[index] = vec4f(offsetX, offsetY, 0.0, angle);
   motionC[index] = vec4f(0.0, 0.0, 0.0, 0.0);
+  colors[index] = wormColor(index);
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE)
@@ -106,7 +116,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let height = params.canvasWormsApples.y;
   let appleCount = u32(params.canvasWormsApples.w);
   let elapsedMs = params.elapsedDistances.x;
-  let speedScale = params.reserved.y;
+  let segmentNodeCount = max(2u, u32(params.reserved.z));
+  let segmentSpacing = params.reserved.w;
   let appleTurnMs = params.turn.x;
   let changeDirectionMs = params.turn.y;
   let maxRandomAngleChange = params.turn.z;
@@ -114,8 +125,10 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let cursorRepellentPosition = params.cursorRepellent.xy;
   let cursorRepellentActive = params.cursorRepellent.z;
   let cursorRepellentRadius = params.cursorRepellent.w;
+  let segmentBase = index * segmentNodeCount;
 
-  var position = positions[index];
+  var headPosition = segmentPositions[segmentBase];
+  let previousHeadPosition = headPosition;
   var velocity = motionA[index].xy;
   let speed = motionA[index].z;
   let crazinessPerMs = motionA[index].w;
@@ -123,7 +136,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   var angle = motionB[index].w;
   var angleStepPerMs = motionC[index].x;
   var angleChangeMsLeft = motionC[index].y;
-  let startPosition = position.xy;
+  var tailDistanceCarry = motionC[index].z;
   var appleGlow = 0.0;
   var eatingGlow = 0.0;
   var repellentGlow = 0.0;
@@ -142,7 +155,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
       }
 
       let appleStrength = 0.1 + 0.9 * sqrt(apple.volume);
-      let appleDelta = apple.position - position.xy;
+      let appleDelta = apple.position - headPosition;
       let appleDistanceSquared = dot(appleDelta, appleDelta);
       if (appleDistanceSquared <= apple.radius * apple.radius && appleDistanceSquared < eatenAppleDistanceSquared) {
         eatenAppleIndex = appleIndex;
@@ -150,7 +163,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
       }
 
       let gravityRadius = max(apple.radius * APPLE_GRAVITY_RADIUS_SCALE, apple.radius + 1.0);
-      let delta = apple.position - position.xy + offset * appleStrength;
+      let delta = apple.position - headPosition + offset * appleStrength;
       let distanceSquared = max(dot(delta, delta), 16.0);
       let radiusSquared = gravityRadius * gravityRadius;
       if (distanceSquared < radiusSquared) {
@@ -207,7 +220,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   }
 
   if (cursorRepellentActive > 0.0) {
-    let repellentDelta = position.xy - cursorRepellentPosition;
+    let repellentDelta = headPosition - cursorRepellentPosition;
     let repellentDistanceSquared = dot(repellentDelta, repellentDelta);
     let repellentRadiusSquared = cursorRepellentRadius * cursorRepellentRadius;
     if (repellentDistanceSquared > 1.0 && repellentDistanceSquared < repellentRadiusSquared) {
@@ -240,49 +253,92 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft -= elapsedMs;
   }
 
-  var nextPosition = position.xy + velocity * elapsedMs * speedScale;
+  var nextHeadPosition = headPosition + velocity * elapsedMs;
   var bounced = false;
 
-  if (nextPosition.y < 0.0) {
-    position.y = 0.0;
+  if (nextHeadPosition.y < 0.0) {
+    headPosition.y = 0.0;
     velocity.y *= -1.0;
     bounced = true;
-  } else if (nextPosition.y > height) {
-    position.y = height;
+  } else if (nextHeadPosition.y > height) {
+    headPosition.y = height;
     velocity.y *= -1.0;
     bounced = true;
   }
 
-  if (nextPosition.x < 0.0) {
-    position.x = 0.0;
+  if (nextHeadPosition.x < 0.0) {
+    headPosition.x = 0.0;
     velocity.x *= -1.0;
     bounced = true;
-  } else if (nextPosition.x > width) {
-    position.x = width;
+  } else if (nextHeadPosition.x > width) {
+    headPosition.x = width;
     velocity.x *= -1.0;
     bounced = true;
   }
 
   if (bounced) {
-    nextPosition = position.xy + velocity * elapsedMs * speedScale;
+    nextHeadPosition = headPosition + velocity * elapsedMs;
     angle = atan2(velocity.y, velocity.x);
     angleChangeMsLeft = 0.0;
   }
 
-  let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+  let clampedHead = clampToCanvas(nextHeadPosition, width, height);
+  let headDelta = clampedHead - previousHeadPosition;
+  let headMoveDistance = length(headDelta);
+  let previousFirstTailPosition = segmentPositions[segmentBase + 1u];
+  let firstTailDelta = previousFirstTailPosition - clampedHead;
+  let firstTailDistanceSquared = dot(firstTailDelta, firstTailDelta);
+  var firstTailPosition = clampedHead;
+  if (firstTailDistanceSquared > 0.0001) {
+    firstTailPosition = clampedHead + normalize(firstTailDelta) * segmentSpacing;
+  } else {
+    let tailAngle = angle + PI;
+    let fallbackDirection = vec2f(cos(tailAngle), sin(tailAngle));
+    firstTailPosition = clampedHead + fallbackDirection * segmentSpacing;
+  }
+  firstTailPosition = clampToCanvas(firstTailPosition, width, height);
+
   let baseColor = wormColor(index);
   let appleTint = vec3f(1.0, 0.18, 0.05);
   let eatingTint = vec3f(1.0, 0.92, 0.3);
   let repellentTint = vec3f(0.05, 0.82, 1.0);
   let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
   let hungryColor = mix(attractedColor, eatingTint, eatingGlow * 0.55);
-  let color = vec4f(mix(hungryColor, repellentTint, repellentGlow * 0.7), min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2));
-  vertices[index * 2u] = LineVertex(clampedStart, color);
-  vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+  let color = vec4f(
+    mix(hungryColor, repellentTint, repellentGlow * 0.7),
+    min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2)
+  );
+  colors[index] = color;
+  segmentPositions[segmentBase] = clampedHead;
+  segmentPositions[segmentBase + 1u] = firstTailPosition;
 
-  positions[index] = vec4f(nextPosition, nextPosition);
+  var nextTailDistanceCarry = tailDistanceCarry + headMoveDistance;
+  let maxInsertedTailSamples = segmentNodeCount - 2u;
+  if (nextTailDistanceCarry >= segmentSpacing && maxInsertedTailSamples > 0u) {
+    let insertedTailSamples = min(maxInsertedTailSamples, u32(nextTailDistanceCarry / segmentSpacing));
+
+    var segmentIndex = segmentNodeCount - 1u;
+    loop {
+      if (segmentIndex <= insertedTailSamples + 1u) {
+        break;
+      }
+      segmentPositions[segmentBase + segmentIndex] = segmentPositions[segmentBase + segmentIndex - insertedTailSamples];
+      segmentIndex = segmentIndex - 1u;
+    }
+
+    for (var sampleIndex = 0u; sampleIndex < insertedTailSamples; sampleIndex++) {
+      let interpolationAmount = f32(sampleIndex + 1u) / f32(insertedTailSamples + 1u);
+      segmentPositions[segmentBase + sampleIndex + 2u] =
+        firstTailPosition + (previousFirstTailPosition - firstTailPosition) * interpolationAmount;
+    }
+
+    nextTailDistanceCarry -= f32(insertedTailSamples) * segmentSpacing;
+    if (insertedTailSamples == maxInsertedTailSamples && nextTailDistanceCarry >= segmentSpacing) {
+      nextTailDistanceCarry -= floor(nextTailDistanceCarry / segmentSpacing) * segmentSpacing;
+    }
+  }
+
   motionA[index] = vec4f(velocity, speed, crazinessPerMs);
   motionB[index] = vec4f(offset, 0.0, angle);
-  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
+  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, nextTailDistanceCarry, 0.0);
 }
