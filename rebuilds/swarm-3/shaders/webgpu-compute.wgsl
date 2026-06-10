@@ -128,7 +128,6 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let segmentBase = index * segmentNodeCount;
 
   var headPosition = segmentPositions[segmentBase];
-  let previousHeadPosition = headPosition;
   var velocity = motionA[index].xy;
   let speed = motionA[index].z;
   let crazinessPerMs = motionA[index].w;
@@ -136,7 +135,6 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   var angle = motionB[index].w;
   var angleStepPerMs = motionC[index].x;
   var angleChangeMsLeft = motionC[index].y;
-  var tailDistanceCarry = motionC[index].z;
   var appleGlow = 0.0;
   var eatingGlow = 0.0;
   var repellentGlow = 0.0;
@@ -283,21 +281,6 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   }
 
   let clampedHead = clampToCanvas(nextHeadPosition, width, height);
-  let headDelta = clampedHead - previousHeadPosition;
-  let headMoveDistance = length(headDelta);
-  let previousFirstTailPosition = segmentPositions[segmentBase + 1u];
-  let firstTailDelta = previousFirstTailPosition - clampedHead;
-  let firstTailDistanceSquared = dot(firstTailDelta, firstTailDelta);
-  var firstTailPosition = clampedHead;
-  if (firstTailDistanceSquared > 0.0001) {
-    firstTailPosition = clampedHead + normalize(firstTailDelta) * segmentSpacing;
-  } else {
-    let tailAngle = angle + PI;
-    let fallbackDirection = vec2f(cos(tailAngle), sin(tailAngle));
-    firstTailPosition = clampedHead + fallbackDirection * segmentSpacing;
-  }
-  firstTailPosition = clampToCanvas(firstTailPosition, width, height);
-
   let baseColor = wormColor(index);
   let appleTint = vec3f(1.0, 0.18, 0.05);
   let eatingTint = vec3f(1.0, 0.92, 0.3);
@@ -310,35 +293,24 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   );
   colors[index] = color;
   segmentPositions[segmentBase] = clampedHead;
-  segmentPositions[segmentBase + 1u] = firstTailPosition;
 
-  var nextTailDistanceCarry = tailDistanceCarry + headMoveDistance;
-  let maxInsertedTailSamples = segmentNodeCount - 2u;
-  if (nextTailDistanceCarry >= segmentSpacing && maxInsertedTailSamples > 0u) {
-    let insertedTailSamples = min(maxInsertedTailSamples, u32(nextTailDistanceCarry / segmentSpacing));
-
-    var segmentIndex = segmentNodeCount - 1u;
-    loop {
-      if (segmentIndex <= insertedTailSamples + 1u) {
-        break;
-      }
-      segmentPositions[segmentBase + segmentIndex] = segmentPositions[segmentBase + segmentIndex - insertedTailSamples];
-      segmentIndex = segmentIndex - 1u;
+  var previousSegmentPosition = clampedHead;
+  let tailAngle = angle + PI;
+  let fallbackDirection = vec2f(cos(tailAngle), sin(tailAngle));
+  for (var segmentIndex = 1u; segmentIndex < segmentNodeCount; segmentIndex++) {
+    let currentSegmentPosition = segmentPositions[segmentBase + segmentIndex];
+    let segmentDelta = currentSegmentPosition - previousSegmentPosition;
+    let segmentDistanceSquared = dot(segmentDelta, segmentDelta);
+    var nextSegmentPosition = previousSegmentPosition + fallbackDirection * segmentSpacing;
+    if (segmentDistanceSquared > 0.0001) {
+      nextSegmentPosition = previousSegmentPosition + normalize(segmentDelta) * segmentSpacing;
     }
-
-    for (var sampleIndex = 0u; sampleIndex < insertedTailSamples; sampleIndex++) {
-      let interpolationAmount = f32(sampleIndex + 1u) / f32(insertedTailSamples + 1u);
-      segmentPositions[segmentBase + sampleIndex + 2u] =
-        firstTailPosition + (previousFirstTailPosition - firstTailPosition) * interpolationAmount;
-    }
-
-    nextTailDistanceCarry -= f32(insertedTailSamples) * segmentSpacing;
-    if (insertedTailSamples == maxInsertedTailSamples && nextTailDistanceCarry >= segmentSpacing) {
-      nextTailDistanceCarry -= floor(nextTailDistanceCarry / segmentSpacing) * segmentSpacing;
-    }
+    nextSegmentPosition = clampToCanvas(nextSegmentPosition, width, height);
+    segmentPositions[segmentBase + segmentIndex] = nextSegmentPosition;
+    previousSegmentPosition = nextSegmentPosition;
   }
 
   motionA[index] = vec4f(velocity, speed, crazinessPerMs);
   motionB[index] = vec4f(offset, 0.0, angle);
-  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, nextTailDistanceCarry, 0.0);
+  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
 }
