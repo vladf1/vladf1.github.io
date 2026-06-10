@@ -216,13 +216,16 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
       let randomAngle = randomUnit(index) * TWO_PI;
       let escapeDirection = normalize(repellentDelta);
       let tangent = vec2f(-escapeDirection.y, escapeDirection.x) * randomBetween(index, -1.0, 1.0);
-      let scatter = vec2f(cos(randomAngle), sin(randomAngle)) * repellentFalloff * (0.72 + 0.24 * crazinessScale);
-      let escape = escapeDirection + scatter + tangent * repellentFalloff * (0.38 + 0.22 * crazinessScale);
-      angleChangeMsLeft = mix(changeDirectionMs * 0.45, changeDirectionMs, repellentFalloff);
-      let repellentJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * repellentFalloff * (0.22 + 0.14 * crazinessScale);
+      let scatter = vec2f(cos(randomAngle), sin(randomAngle)) * repellentFalloff * (0.48 + 0.18 * crazinessScale);
+      let escape = escapeDirection * (1.8 + repellentFalloff * 1.2) + scatter + tangent * repellentFalloff * (0.22 + 0.16 * crazinessScale);
+      angleChangeMsLeft = mix(changeDirectionMs * 0.18, changeDirectionMs * 0.48, 1.0 - repellentFalloff);
+      let repellentJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * repellentFalloff * (0.14 + 0.1 * crazinessScale);
       let newAngle = atan2(escape.y, escape.x) + repellentJitter;
       angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
-      repellentGlow = max(repellentGlow, repellentFalloff);
+      let immediateTurn = repellentFalloff * (0.28 + 0.1 * crazinessScale);
+      angle += angleDifference(newAngle, angle) * immediateTurn;
+      velocity = vec2f(speed * cos(angle), speed * sin(angle));
+      repellentGlow = max(repellentGlow, min(1.0, repellentFalloff * 1.45));
     }
   }
 

@@ -12,7 +12,7 @@ const MAX_REPELLENTS = 32;
 const APPLE_MAX_RADIUS = 62;
 const APPLE_GRAVITY_RADIUS_SCALE = 7.2;
 const APPLE_BITE_PER_TRIANGLE_PER_MS = 0.000000075;
-const REPELLENT_RADIUS = 220;
+const REPELLENT_RADIUS = 300;
 const REPELLENT_MARKER_RADIUS = 34;
 const REPELLENT_RAYS = 8;
 const TWO_PI = Math.PI * 2;
@@ -173,7 +173,7 @@ export function startTriangleSwarmApp() {
         if (distanceSquared > 1 && distanceSquared < repellentRadiusSquared) {
           const distance = Math.sqrt(distanceSquared);
           const falloff = 1 - distance / REPELLENT_RADIUS;
-          const push = falloff * falloff * (0.85 + craziness * 0.18);
+          const push = falloff * falloff * (2.4 + craziness * 0.38);
           steerX += dx / distance * push;
           steerY += dy / distance * push;
         }
@@ -181,7 +181,7 @@ export function startTriangleSwarmApp() {
 
       const steerLength = Math.hypot(steerX, steerY) || 1;
       const targetAngle = Math.atan2(steerY / steerLength, steerX / steerLength);
-      triangle.angle = turnTowardAngle(triangle.angle, targetAngle, Math.min(1, 0.2 + craziness * 0.08));
+      triangle.angle = turnTowardAngle(triangle.angle, targetAngle, Math.min(1, 0.36 + craziness * 0.12));
       const distance = triangle.baseSpeed * speed * elapsedMs;
       triangle.x += Math.cos(triangle.angle) * distance;
       triangle.y += Math.sin(triangle.angle) * distance;
@@ -331,18 +331,22 @@ export function startTriangleSwarmApp() {
     writeConfigToUrl();
   }
 
-  function setCraziness(value: string) {
+  function setCraziness(value: string, updateUrl = true) {
     const parsed = Number.parseFloat(value);
     craziness = clampNumber(Number.isFinite(parsed) ? parsed : DEFAULT_CRAZINESS, MIN_CRAZINESS, MAX_CRAZINESS);
     crazinessInput.value = String(craziness);
-    writeConfigToUrl();
+    if (updateUrl) {
+      writeConfigToUrl();
+    }
   }
 
-  function setSpeed(value: string) {
+  function setSpeed(value: string, updateUrl = true) {
     const parsed = Number.parseFloat(value);
     speed = clampNumber(Number.isFinite(parsed) ? parsed : DEFAULT_SPEED, MIN_SPEED, MAX_SPEED);
     speedInput.value = String(speed);
-    writeConfigToUrl();
+    if (updateUrl) {
+      writeConfigToUrl();
+    }
   }
 
   function createTriangle(): Triangle {
@@ -479,7 +483,10 @@ export function startTriangleSwarmApp() {
     query.set("NumberOfSprites", String(triangleCount));
     query.set("Craziness", formatNumber(craziness));
     query.set("Speed", formatNumber(speed));
-    history.replaceState(null, "", `${location.pathname}?${query}`);
+    const nextUrl = `${location.pathname}?${query}`;
+    if (nextUrl !== `${location.pathname}${location.search}`) {
+      history.replaceState(null, "", nextUrl);
+    }
   }
 
   function updateAppleStatsText() {
@@ -579,9 +586,9 @@ export function startTriangleSwarmApp() {
   resetApplesButton.addEventListener("click", resetSimulation);
   triangleCountInput.addEventListener("input", () => setTriangleCount(triangleCountInput.value));
   triangleCountInput.addEventListener("change", () => setTriangleCount(triangleCountInput.value));
-  crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));
+  crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value, false));
   crazinessInput.addEventListener("change", () => setCraziness(crazinessInput.value));
-  speedInput.addEventListener("input", () => setSpeed(speedInput.value));
+  speedInput.addEventListener("input", () => setSpeed(speedInput.value, false));
   speedInput.addEventListener("change", () => setSpeed(speedInput.value));
 
   resize();
