@@ -275,6 +275,7 @@ export async function createWebgpuComputeRenderer(
     applePreviewData = applePreviewData;
     repellentMarkerData = repellentMarkerData;
     appleSlotCount = MAX_APPLES;
+    activeAppleSlotCount = 0;
     repellentCount = 0;
     applePlacementCount = 0;
     applePreviewVisible = false;
@@ -418,7 +419,7 @@ export async function createWebgpuComputeRenderer(
         );
       }
       const hasAppleWork = hasActiveApples || applePlacementCount > 0;
-      const activeAppleSlotCount = hasAppleWork ? this.appleSlotCount : 0;
+      const activeAppleSlotCount = hasAppleWork ? Math.min(this.appleSlotCount, this.activeAppleSlotCount + applePlacementCount) : 0;
       this.paramsData[0] = this.width;
       this.paramsData[1] = this.height;
       this.paramsData[2] = this.wormCount;
@@ -440,6 +441,7 @@ export async function createWebgpuComputeRenderer(
       this.paramsData[18] = cursorRepellentActive;
       this.paramsData[19] = REPELLENT_RADIUS;
       this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
+      this.activeAppleSlotCount = activeAppleSlotCount;
 
       if (fadeAmount !== null) {
         this.fadeData[0] = Math.max(0, Math.min(1, 1 - fadeAmount));
@@ -456,7 +458,7 @@ export async function createWebgpuComputeRenderer(
 
       runComputePass(encoder, this.updateWormStateAndWriteLineVerticesPipeline, this.computeBindGroup, Math.ceil(this.wormCount / 256));
       if (hasAppleWork) {
-        runComputePass(encoder, this.updateAppleStateAndWriteAppleShapeVerticesPipeline, this.appleBindGroup, Math.ceil(this.appleSlotCount / 64));
+        runComputePass(encoder, this.updateAppleStateAndWriteAppleShapeVerticesPipeline, this.appleBindGroup, Math.ceil(activeAppleSlotCount / 64));
       }
 
       if (applePlacementCount > 0) {
@@ -510,6 +512,7 @@ export async function createWebgpuComputeRenderer(
       }
       this.appleFreeCountData[0] = MAX_APPLES;
       this.applePlacementCount = 0;
+      this.activeAppleSlotCount = 0;
       this.device.queue.writeBuffer(this.appleBuffer, 0, this.appleData);
       this.device.queue.writeBuffer(this.appleEaterBuffer, 0, this.appleEaterClearData);
       this.device.queue.writeBuffer(this.appleFreeSlotBuffer, 0, this.appleFreeSlotData);
@@ -578,7 +581,7 @@ export async function createWebgpuComputeRenderer(
       pass.setPipeline(this.drawBufferedLineVerticesPipeline);
       pass.setBindGroup(0, this.lineBindGroup);
       pass.setVertexBuffer(0, this.appleVertexBuffer);
-      pass.draw(this.appleSlotCount * VERTICES_PER_APPLE_MARKER);
+      pass.draw(this.activeAppleSlotCount * VERTICES_PER_APPLE_MARKER);
       pass.end();
     }
 
@@ -617,6 +620,7 @@ export async function createWebgpuComputeRenderer(
       this.appleSnapshotPending = true;
       this.appleReadbackBuffer.mapAsync(GPUMapMode.READ).then(() => {
         const snapshot = new Float32Array(this.appleReadbackBuffer.getMappedRange()).slice(0, this.appleSlotCount * FLOATS_PER_APPLE);
+        this.activeAppleSlotCount = getActiveAppleSlotCount(snapshot);
         this.appleReadbackBuffer.unmap();
         this.appleSnapshotPending = false;
         const handler = this.appleSnapshotHandler;
@@ -630,6 +634,24 @@ export async function createWebgpuComputeRenderer(
 
     finish() {
       return this.device.queue.onSubmittedWorkDone();
+    }
+
+    destroy() {
+      this.trailTexture?.destroy();
+      this.trailTexture = null;
+      destroyWormResources(this.wormResources);
+      this.appleBuffer.destroy();
+      this.appleEaterBuffer.destroy();
+      this.appleFreeSlotBuffer.destroy();
+      this.appleFreeCountBuffer.destroy();
+      this.applePlacementBuffer.destroy();
+      this.appleReadbackBuffer.destroy();
+      this.appleVertexBuffer.destroy();
+      this.applePreviewBuffer.destroy();
+      this.repellentVertexBuffer.destroy();
+      this.paramsBuffer.destroy();
+      this.resolutionBuffer.destroy();
+      this.fadeBuffer.destroy();
     }
   }();
 
@@ -789,6 +811,16 @@ function writeMarkerVertex(
   return offset + FLOATS_PER_MARKER_VERTEX;
 }
 
+function getActiveAppleSlotCount(snapshot: Float32Array) {
+  for (let index = MAX_APPLES - 1; index >= 0; index--) {
+    const offset = index * FLOATS_PER_APPLE;
+    if (snapshot[offset + 2] > 0 && snapshot[offset + 3] > 0) {
+      return index + 1;
+    }
+  }
+  return 0;
+}
+
 function createWormResources(device: GPUDevice, capacityWormCount: number) {
   return {
     positionBuffer: createEmptyStorageBuffer(device, capacityWormCount * BYTES_PER_WORM_VEC4_BUFFER),
@@ -801,6 +833,15 @@ function createWormResources(device: GPUDevice, capacityWormCount: number) {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
     })
   };
+}
+
+function destroyWormResources(wormResources: ReturnType<typeof createWormResources>) {
+  wormResources.positionBuffer.destroy();
+  wormResources.motionABuffer.destroy();
+  wormResources.motionBBuffer.destroy();
+  wormResources.motionCBuffer.destroy();
+  wormResources.randomBuffer.destroy();
+  wormResources.vertexBuffer.destroy();
 }
 
 function createEmptyStorageBuffer(device: GPUDevice, size: number) {

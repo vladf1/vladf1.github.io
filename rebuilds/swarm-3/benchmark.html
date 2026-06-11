@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swarm 3 Benchmark</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #050506;
+        color: #f8fafc;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #050506;
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 32px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 24px;
+      }
+
+      button {
+        height: 36px;
+        padding: 0 14px;
+        border: 1px solid #7df9ff;
+        border-radius: 6px;
+        color: #06111f;
+        background: #7df9ff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.62;
+      }
+
+      #status {
+        min-height: 22px;
+        margin: 14px 0;
+        color: #f4ff28;
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #1f2937;
+      }
+
+      th,
+      td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #1f2937;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+
+      th {
+        color: #cbd5e1;
+        background: #111827;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      canvas {
+        display: block;
+        width: min(800px, 100%);
+        aspect-ratio: 4 / 3;
+        margin-top: 16px;
+        background: black;
+        border: 1px solid #1f2937;
+      }
+
+      pre {
+        overflow: auto;
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid #1f2937;
+        background: #09090b;
+        color: #cbd5e1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Swarm 3 Benchmark</h1>
+      <button id="runButton" type="button">Run benchmark</button>
+      <p id="status"></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Worms</th>
+            <th>Apples</th>
+            <th>Median ms/frame</th>
+            <th>Min</th>
+            <th>P95</th>
+          </tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+      <canvas id="swarm" aria-label="Swarm 3 benchmark canvas"></canvas>
+      <pre id="jsonOutput"></pre>
+    </main>
+    <script type="module" src="./swarm-3-benchmark.ts"></script>
+  </body>
+</html>
