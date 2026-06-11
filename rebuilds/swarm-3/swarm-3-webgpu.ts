@@ -22,7 +22,7 @@ const WORM_APPLE_TURN_MS = 83.33333333333333;
 const WORM_CHANGE_DIRECTION_MS = 166.66666666666666;
 const WORM_MAX_RANDOM_ANGLE_CHANGE = 1.5;
 export const APPLE_MAX_RADIUS = 62;
-const REPELLENT_RADIUS = 300;
+const REPELLENT_RADIUS = 220;
 export const REPELLENT_MARKER_RADIUS = 34;
 const APPLE_MIN_ACTIVE_RADIUS = 15;
 const FLOATS_PER_APPLE = 4;
@@ -33,7 +33,7 @@ const VERTICES_PER_APPLE_MARKER = 16 + APPLE_RADIUS_SEGMENTS * 2;
 const REPELLENT_BURST_RAYS = 8;
 const VERTICES_PER_REPELLENT_MARKER = REPELLENT_BURST_RAYS * 2;
 const VERTICES_PER_PREVIEW_MARKER = APPLE_RADIUS_SEGMENTS * 4;
-const VERTICES_PER_WORM = 2;
+const VERTICES_PER_WORM = 3;
 const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
 const WORM_CAPACITY_BUCKET_SIZE = 250000;
 const FLOATS_PER_WORM_VEC4_BUFFER = 4;
@@ -109,6 +109,21 @@ export async function createWebgpuComputeRenderer(
   const initializeWormStateRangePipeline = createComputePipeline(device, computeShader, "initMain");
   const updateAppleStateAndWriteAppleShapeVerticesPipeline = createComputePipeline(device, appleShader, "computeMain");
   const placeQueuedApplesPipeline = createComputePipeline(device, appleShader, "placementMain");
+  const drawBufferedTriangleVerticesPipeline = createLinePipeline(device, format, lineShader, "vertexMain", [{
+    arrayStride: COMPUTE_VERTEX_STRIDE,
+    attributes: [
+      {
+        shaderLocation: 0,
+        offset: 0,
+        format: "float32x2"
+      },
+      {
+        shaderLocation: 1,
+        offset: 16,
+        format: "float32x4"
+      }
+    ]
+  }], "triangle-list");
   const drawBufferedLineVerticesPipeline = createLinePipeline(device, format, lineShader, "vertexMain", [{
     arrayStride: COMPUTE_VERTEX_STRIDE,
     attributes: [
@@ -209,6 +224,10 @@ export async function createWebgpuComputeRenderer(
       bufferBinding(6, applePlacementBuffer)
     ]
   });
+  const triangleBindGroup = device.createBindGroup({
+    layout: drawBufferedTriangleVerticesPipeline.getBindGroupLayout(0),
+    entries: [bufferBinding(0, resolutionBuffer)]
+  });
   const lineBindGroup = device.createBindGroup({
     layout: drawBufferedLineVerticesPipeline.getBindGroupLayout(0),
     entries: [bufferBinding(0, resolutionBuffer)]
@@ -241,6 +260,7 @@ export async function createWebgpuComputeRenderer(
     initializeWormStateRangePipeline = initializeWormStateRangePipeline;
     updateAppleStateAndWriteAppleShapeVerticesPipeline = updateAppleStateAndWriteAppleShapeVerticesPipeline;
     placeQueuedApplesPipeline = placeQueuedApplesPipeline;
+    drawBufferedTriangleVerticesPipeline = drawBufferedTriangleVerticesPipeline;
     drawBufferedLineVerticesPipeline = drawBufferedLineVerticesPipeline;
     fadeTrailImagePipeline = fadeTrailImagePipeline;
     drawApplePreviewRingsPipeline = drawApplePreviewRingsPipeline;
@@ -248,6 +268,7 @@ export async function createWebgpuComputeRenderer(
     initBindGroup = initBindGroup;
     appleBindGroup = appleBindGroup;
     applePlacementBindGroup = applePlacementBindGroup;
+    triangleBindGroup = triangleBindGroup;
     lineBindGroup = lineBindGroup;
     fadeBindGroup = fadeBindGroup;
     previewBindGroup = previewBindGroup;
@@ -463,12 +484,12 @@ export async function createWebgpuComputeRenderer(
         runComputePass(encoder, this.placeQueuedApplesPipeline, this.applePlacementBindGroup, 1);
       }
 
-      const linePass = beginRenderPass(encoder, this.trailView);
-      linePass.setPipeline(this.drawBufferedLineVerticesPipeline);
-      linePass.setBindGroup(0, this.lineBindGroup);
-      linePass.setVertexBuffer(0, this.vertexBuffer);
-      linePass.draw(this.wormCount * VERTICES_PER_WORM);
-      linePass.end();
+      const wormPass = beginRenderPass(encoder, this.trailView, fadeAmount === null ? "clear" : "load");
+      wormPass.setPipeline(this.drawBufferedTriangleVerticesPipeline);
+      wormPass.setBindGroup(0, this.triangleBindGroup);
+      wormPass.setVertexBuffer(0, this.vertexBuffer);
+      wormPass.draw(this.wormCount * VERTICES_PER_WORM);
+      wormPass.end();
       const shouldReadApples = this.appleSnapshotHandler !== null && !this.appleSnapshotPending;
       if (shouldReadApples) {
         encoder.copyBufferToBuffer(this.appleBuffer, 0, this.appleReadbackBuffer, 0, this.appleData.byteLength);
@@ -717,7 +738,8 @@ function createLinePipeline(
   format: GPUTextureFormat,
   shader: GPUShaderModule,
   vertexEntryPoint: string,
-  buffers: GPUVertexBufferLayout[] = []
+  buffers: GPUVertexBufferLayout[] = [],
+  topology: GPUPrimitiveTopology = "line-list"
 ) {
   return device.createRenderPipeline({
     layout: "auto",
@@ -746,7 +768,7 @@ function createLinePipeline(
       }]
     },
     primitive: {
-      topology: "line-list"
+      topology
     }
   });
 }
