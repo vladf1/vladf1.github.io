@@ -105,6 +105,37 @@
         transform: translate(-50%, 0);
       }
 
+      #pauseButton {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        color: white;
+        background: transparent;
+        border: 0;
+        border-radius: 50%;
+        font: 30px/1 "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+        cursor: pointer;
+        text-shadow:
+          0 1px 2px rgb(0 0 0 / 92%),
+          0 0 10px rgb(244 255 40 / 36%);
+        transform: translateZ(0);
+      }
+
+      #pauseButton:hover {
+        transform: scale(1.08);
+      }
+
+      #pauseButton:focus-visible {
+        outline: 2px solid #f4ff28;
+        outline-offset: 2px;
+      }
+
       #controls {
         position: fixed;
         left: 50%;
@@ -319,6 +350,14 @@
           top: 10px;
         }
 
+        #pauseButton {
+          right: 8px;
+          top: 8px;
+          width: 42px;
+          height: 42px;
+          font-size: 26px;
+        }
+
         #controls {
           gap: 7px;
           padding: 8px;
@@ -354,10 +393,9 @@
     <div id="stats"></div>
     <div id="hint">Worms love apples. Choose a placement mode, then tap to plant.</div>
     <div id="notice" role="status" aria-live="polite"></div>
+    <button id="pauseButton" type="button" aria-label="Pause" aria-pressed="false">⏸️</button>
     <div id="controls">
       <div class="control-row">
-        <button id="pauseButton" class="control-button" type="button" aria-pressed="false">Pause</button>
-        <button id="resetApplesButton" class="control-button secondary" type="button">Reset</button>
         <div class="segmented-field">
           <span class="control-label">Render</span>
           <div class="segmented-control" role="group" aria-label="Render mode">
@@ -372,6 +410,7 @@
             <button id="repellentPlacementButton" class="control-button" type="button" aria-pressed="false">Repellents</button>
           </div>
         </div>
+        <button id="resetApplesButton" class="control-button secondary" type="button">Reset</button>
       </div>
       <div class="control-row settings-row">
         <label class="control-field">

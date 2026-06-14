@@ -155,7 +155,8 @@ export async function startSwarmApp() {
   }
 
   function syncControls() {
-    pauseButton.textContent = paused ? "Resume" : "Pause";
+    pauseButton.textContent = paused ? "▶️" : "⏸️";
+    pauseButton.setAttribute("aria-label", paused ? "Resume" : "Pause");
     pauseButton.setAttribute("aria-pressed", String(paused));
     wormCountInput.value = String(wormCount);
     crazinessInput.value = String(craziness);
