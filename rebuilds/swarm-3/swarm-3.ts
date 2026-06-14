@@ -17,6 +17,8 @@ export async function startSwarmApp() {
   const stats = document.querySelector<HTMLDivElement>("#stats")!;
   const pauseButton = document.querySelector<HTMLButtonElement>("#pauseButton")!;
   const resetApplesButton = document.querySelector<HTMLButtonElement>("#resetApplesButton")!;
+  const linesModeButton = document.querySelector<HTMLButtonElement>("#linesModeButton")!;
+  const trianglesModeButton = document.querySelector<HTMLButtonElement>("#trianglesModeButton")!;
   const wormCountInput = document.querySelector<HTMLInputElement>("#wormCount")!;
   const crazinessInput = document.querySelector<HTMLInputElement>("#craziness")!;
   const speedInput = document.querySelector<HTMLInputElement>("#speed")!;
@@ -27,6 +29,7 @@ export async function startSwarmApp() {
   const initialWormCount = Number.parseInt(params.get("NumberOfSprites") ?? "", 10);
   const initialCraziness = Number.parseFloat(params.get("Craziness") ?? "");
   const initialSpeed = Number.parseFloat(params.get("Speed") ?? "");
+  const initialRenderMode = parseRenderMode(params.get("RenderMode"));
   let wormCount = Math.min(
     Number.isFinite(initialWormCount) && initialWormCount > 0 ? initialWormCount : webgpu.DEFAULT_WORM_COUNT,
     webgpu.MAX_SAFE_WORM_COUNT
@@ -41,6 +44,7 @@ export async function startSwarmApp() {
     webgpu.MIN_SPEED,
     webgpu.MAX_SPEED
   );
+  let renderMode = initialRenderMode;
   let maxWormCount = webgpu.MAX_SAFE_WORM_COUNT;
   let appleBitePercentPerSecond = webgpu.APPLE_BITE_PERCENT_PER_SECOND * webgpu.DEFAULT_WORM_COUNT / wormCount;
   const fadeAmountPerMs = webgpu.DEFAULT_FADE_AMOUNT * webgpu.FADE_AMOUNT_PER_MS_SCALE;
@@ -110,7 +114,6 @@ export async function startSwarmApp() {
       }
     }
 
-    const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
     let activeRepellentX = repellentX;
     let activeRepellentY = repellentY;
     let activeRepellent = false;
@@ -120,6 +123,7 @@ export async function startSwarmApp() {
       activeRepellentY = repellent.y;
       activeRepellent = true;
     }
+    const frameFadeAmount = renderMode === "lines" ? 1 - fadeAmountPerMs * elapsedMs : null;
     try {
       renderer.drawFrame(
         elapsedMs,
@@ -152,6 +156,8 @@ export async function startSwarmApp() {
     wormCountInput.value = String(wormCount);
     crazinessInput.value = String(craziness);
     speedInput.value = String(speed);
+    linesModeButton.setAttribute("aria-pressed", String(renderMode === "lines"));
+    trianglesModeButton.setAttribute("aria-pressed", String(renderMode === "triangles"));
   }
 
   function setPaused(value: boolean) {
@@ -214,6 +220,17 @@ export async function startSwarmApp() {
     writeConfigToUrl();
   }
 
+  function setRenderMode(nextRenderMode: webgpu.RenderMode) {
+    if (nextRenderMode === renderMode) {
+      return;
+    }
+
+    renderMode = nextRenderMode;
+    renderer?.setRenderMode(renderMode);
+    syncControls();
+    writeConfigToUrl();
+  }
+
   async function resetDrawingSurface() {
     const generation = rendererGeneration + 1;
     rendererGeneration = generation;
@@ -242,6 +259,7 @@ export async function startSwarmApp() {
     }
     maxWormCount = Math.min(renderer.maxSupportedWormCount, webgpu.MAX_SAFE_WORM_COUNT);
     wormCountInput.max = String(maxWormCount);
+    renderer.setRenderMode(renderMode);
     renderer.resetApples();
     renderer.device.lost.then((info: GPUDeviceLostInfo) => {
       if (generation !== rendererGeneration) {
@@ -267,6 +285,9 @@ export async function startSwarmApp() {
     query.set("NumberOfSprites", String(wormCount));
     query.set("Craziness", formatNumber(craziness));
     query.set("Speed", formatNumber(speed));
+    if (renderMode !== webgpu.DEFAULT_RENDER_MODE) {
+      query.set("RenderMode", renderMode);
+    }
     history.replaceState(null, "", `${location.pathname}?${query}`);
   }
 
@@ -511,6 +532,8 @@ export async function startSwarmApp() {
   canvas.addEventListener("mousedown", plantApple);
   pauseButton.addEventListener("click", () => setPaused(!paused));
   resetApplesButton.addEventListener("click", resetSimulation);
+  linesModeButton.addEventListener("click", () => setRenderMode("lines"));
+  trianglesModeButton.addEventListener("click", () => setRenderMode("triangles"));
   wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
   crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));
@@ -543,6 +566,10 @@ function clampNumber(value: number, minimum: number, maximum: number) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function parseRenderMode(value: string | null): webgpu.RenderMode {
+  return value === "triangles" ? "triangles" : webgpu.DEFAULT_RENDER_MODE;
 }
 
 if (document.querySelector("#swarm")) {

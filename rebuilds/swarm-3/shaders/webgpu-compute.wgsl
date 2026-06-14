@@ -114,6 +114,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let cursorRepellentPosition = params.cursorRepellent.xy;
   let cursorRepellentActive = params.cursorRepellent.z;
   let cursorRepellentRadius = params.cursorRepellent.w;
+  let renderTriangles = params.reserved.w > 0.5;
 
   var position = positions[index];
   var velocity = motionA[index].xy;
@@ -124,13 +125,13 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   var angleStepPerMs = motionC[index].x;
   var angleChangeMsLeft = motionC[index].y;
   let startPosition = position.xy;
+  var attraction = vec2f(0.0, 0.0);
+  var strongestPull = 0.0;
   var appleGlow = 0.0;
   var eatingGlow = 0.0;
   var repellentGlow = 0.0;
 
   if (appleCount > 0u) {
-    var attraction = vec2f(0.0, 0.0);
-    var strongestPull = 0.0;
     var secondAttraction = vec2f(0.0, 0.0);
     var secondPull = 0.0;
     var eatenAppleIndex = appleCount;
@@ -213,16 +214,23 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     if (repellentDistanceSquared > 1.0 && repellentDistanceSquared < repellentRadiusSquared) {
       let repellentDistance = sqrt(repellentDistanceSquared);
       let repellentFalloff = 1.0 - repellentDistance / cursorRepellentRadius;
-      let randomAngle = randomUnit(index) * TWO_PI;
-      let escapeDirection = normalize(repellentDelta);
-      let tangent = vec2f(-escapeDirection.y, escapeDirection.x) * randomBetween(index, -1.0, 1.0);
-      let scatter = vec2f(cos(randomAngle), sin(randomAngle)) * repellentFalloff * (0.72 + 0.24 * crazinessScale);
-      let escape = escapeDirection + scatter + tangent * repellentFalloff * (0.38 + 0.22 * crazinessScale);
-      angleChangeMsLeft = mix(changeDirectionMs * 0.45, changeDirectionMs, repellentFalloff);
-      let repellentJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * repellentFalloff * (0.22 + 0.14 * crazinessScale);
-      let newAngle = atan2(escape.y, escape.x) + repellentJitter;
-      angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
-      repellentGlow = max(repellentGlow, repellentFalloff);
+      let applePriority = smoothstep(0.006, 0.035, strongestPull);
+      let repellentPressure = repellentFalloff * (1.0 - applePriority * 0.96);
+      if (repellentPressure > 0.01) {
+        let randomAngle = randomUnit(index) * TWO_PI;
+        let escapeDirection = normalize(repellentDelta);
+        let tangent = vec2f(-escapeDirection.y, escapeDirection.x) * randomBetween(index, -1.0, 1.0);
+        let scatter = vec2f(cos(randomAngle), sin(randomAngle)) * repellentPressure * (0.34 + 0.12 * crazinessScale);
+        let escape = escapeDirection * (0.95 + repellentPressure * 0.45) + scatter + tangent * repellentPressure * (0.14 + 0.1 * crazinessScale);
+        angleChangeMsLeft = mix(changeDirectionMs * 0.42, changeDirectionMs * 0.78, 1.0 - repellentPressure);
+        let repellentJitter = randomBetween(index, -maxRandomAngleChange, maxRandomAngleChange) * repellentPressure * (0.08 + 0.06 * crazinessScale);
+        let newAngle = atan2(escape.y, escape.x) + repellentJitter;
+        angleStepPerMs = angleDifference(newAngle, angle) / angleChangeMsLeft;
+        let immediateTurn = repellentPressure * (0.08 + 0.04 * crazinessScale);
+        angle += angleDifference(newAngle, angle) * immediateTurn;
+        velocity = vec2f(speed * cos(angle), speed * sin(angle));
+        repellentGlow = max(repellentGlow, min(1.0, repellentPressure * 1.2));
+      }
     }
   }
 
@@ -269,8 +277,15 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft = 0.0;
   }
 
+  let triangleCenter = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+  let forward = vec2f(cos(angle), sin(angle));
+  let side = vec2f(-forward.y, forward.x);
   let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+  let triangleSize = 3.6 + 2.2 * colorUnit((index * 1103515245u + 12345u) >> 16u);
+  let nose = triangleSize * 1.35;
+  let tail = triangleSize * 0.82;
+  let halfWidth = triangleSize * 0.62;
   let baseColor = wormColor(index);
   let appleTint = vec3f(1.0, 0.18, 0.05);
   let eatingTint = vec3f(1.0, 0.92, 0.3);
@@ -278,8 +293,14 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
   let hungryColor = mix(attractedColor, eatingTint, eatingGlow * 0.55);
   let color = vec4f(mix(hungryColor, repellentTint, repellentGlow * 0.7), min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2));
-  vertices[index * 2u] = LineVertex(clampedStart, color);
-  vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+  if (renderTriangles) {
+    vertices[index * 3u] = LineVertex(triangleCenter + forward * nose, color);
+    vertices[index * 3u + 1u] = LineVertex(triangleCenter - forward * tail + side * halfWidth, color);
+    vertices[index * 3u + 2u] = LineVertex(triangleCenter - forward * tail - side * halfWidth, color);
+  } else {
+    vertices[index * 2u] = LineVertex(clampedStart, color);
+    vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+  }
 
   positions[index] = vec4f(nextPosition, nextPosition);
   motionA[index] = vec4f(velocity, speed, crazinessPerMs);
