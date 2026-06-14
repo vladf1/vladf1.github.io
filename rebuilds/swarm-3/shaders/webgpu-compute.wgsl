@@ -114,6 +114,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let cursorRepellentPosition = params.cursorRepellent.xy;
   let cursorRepellentActive = params.cursorRepellent.z;
   let cursorRepellentRadius = params.cursorRepellent.w;
+  let renderTriangles = params.reserved.w > 0.5;
 
   var position = positions[index];
   var velocity = motionA[index].xy;
@@ -279,6 +280,8 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let triangleCenter = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let forward = vec2f(cos(angle), sin(angle));
   let side = vec2f(-forward.y, forward.x);
+  let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+  let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let triangleSize = 3.6 + 2.2 * colorUnit((index * 1103515245u + 12345u) >> 16u);
   let nose = triangleSize * 1.35;
   let tail = triangleSize * 0.82;
@@ -290,9 +293,14 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
   let hungryColor = mix(attractedColor, eatingTint, eatingGlow * 0.55);
   let color = vec4f(mix(hungryColor, repellentTint, repellentGlow * 0.7), min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2));
-  vertices[index * 3u] = LineVertex(triangleCenter + forward * nose, color);
-  vertices[index * 3u + 1u] = LineVertex(triangleCenter - forward * tail + side * halfWidth, color);
-  vertices[index * 3u + 2u] = LineVertex(triangleCenter - forward * tail - side * halfWidth, color);
+  if (renderTriangles) {
+    vertices[index * 3u] = LineVertex(triangleCenter + forward * nose, color);
+    vertices[index * 3u + 1u] = LineVertex(triangleCenter - forward * tail + side * halfWidth, color);
+    vertices[index * 3u + 2u] = LineVertex(triangleCenter - forward * tail - side * halfWidth, color);
+  } else {
+    vertices[index * 2u] = LineVertex(clampedStart, color);
+    vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+  }
 
   positions[index] = vec4f(nextPosition, nextPosition);
   motionA[index] = vec4f(velocity, speed, crazinessPerMs);

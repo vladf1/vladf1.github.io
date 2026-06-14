@@ -163,6 +163,13 @@
         accent-color: #f4ff28;
       }
 
+      .render-mode-group {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        isolation: isolate;
+      }
+
       .control-button {
         min-width: 70px;
         padding: 8px 12px;
@@ -173,6 +180,52 @@
         font: inherit;
         font-weight: 700;
         cursor: pointer;
+      }
+
+      .render-mode-group .control-button {
+        min-width: 76px;
+        padding-inline: 10px;
+        color: #eeeeee;
+        border-color: rgb(255 255 255 / 28%);
+        border-radius: 0;
+        background: rgb(0 0 0 / 32%);
+        box-shadow: none;
+      }
+
+      .render-mode-group .control-button + .control-button {
+        margin-left: -1px;
+      }
+
+      .render-mode-group .control-button:first-child {
+        border-top-left-radius: 6px;
+        border-bottom-left-radius: 6px;
+      }
+
+      .render-mode-group .control-button:last-child {
+        border-top-right-radius: 6px;
+        border-bottom-right-radius: 6px;
+      }
+
+      .render-mode-group .control-button:hover {
+        position: relative;
+        z-index: 1;
+        color: #f8ffff;
+        border-color: rgb(244 255 40 / 58%);
+        background: rgb(244 255 40 / 12%);
+      }
+
+      .render-mode-group .control-button[aria-pressed="true"] {
+        position: relative;
+        z-index: 2;
+        color: #120f00;
+        border-color: rgb(244 255 40 / 92%);
+        background: rgb(244 255 40 / 92%);
+      }
+
+      .render-mode-group .control-button[aria-pressed="true"]:hover {
+        color: #120f00;
+        border-color: #fff77a;
+        background: #fff77a;
       }
 
       .control-button:hover {
@@ -234,6 +287,10 @@
     <div id="controls">
       <button id="pauseButton" class="control-button" type="button" aria-pressed="false">Pause</button>
       <button id="resetApplesButton" class="control-button secondary" type="button">Reset</button>
+      <div class="render-mode-group" role="group" aria-label="Render mode">
+        <button id="linesModeButton" class="control-button" type="button" aria-pressed="true">Lines</button>
+        <button id="trianglesModeButton" class="control-button" type="button" aria-pressed="false">Triangles</button>
+      </div>
       <label class="control-field">
         <span>Worms</span>
         <input id="wormCount" type="number" min="10" max="2000000" step="1000" />
