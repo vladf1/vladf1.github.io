@@ -11,6 +11,7 @@ type RepellentState = {
   x: number;
   y: number;
 };
+type PlacementMode = "apple" | "repellent";
 
 export async function startSwarmApp() {
   const canvas = document.querySelector<HTMLCanvasElement>("#swarm")!;
@@ -19,6 +20,8 @@ export async function startSwarmApp() {
   const resetApplesButton = document.querySelector<HTMLButtonElement>("#resetApplesButton")!;
   const linesModeButton = document.querySelector<HTMLButtonElement>("#linesModeButton")!;
   const trianglesModeButton = document.querySelector<HTMLButtonElement>("#trianglesModeButton")!;
+  const applePlacementButton = document.querySelector<HTMLButtonElement>("#applePlacementButton")!;
+  const repellentPlacementButton = document.querySelector<HTMLButtonElement>("#repellentPlacementButton")!;
   const wormCountInput = document.querySelector<HTMLInputElement>("#wormCount")!;
   const crazinessInput = document.querySelector<HTMLInputElement>("#craziness")!;
   const speedInput = document.querySelector<HTMLInputElement>("#speed")!;
@@ -62,10 +65,11 @@ export async function startSwarmApp() {
   let lastTimed = performance.now();
   let framesRendered = 0;
   let fps: number | null = null;
-  let appleStats = "none";
+  let appleStats = "0";
   let statsText = "";
   let statsDirty = true;
   let paused = false;
+  let placementMode: PlacementMode = "apple";
   let pendingAnimationFrameId = 0;
   let lastApplePlantMs = 0;
   let lastRepellentPlantMs = 0;
@@ -158,6 +162,8 @@ export async function startSwarmApp() {
     speedInput.value = String(speed);
     linesModeButton.setAttribute("aria-pressed", String(renderMode === "lines"));
     trianglesModeButton.setAttribute("aria-pressed", String(renderMode === "triangles"));
+    applePlacementButton.setAttribute("aria-pressed", String(placementMode === "apple"));
+    repellentPlacementButton.setAttribute("aria-pressed", String(placementMode === "repellent"));
   }
 
   function setPaused(value: boolean) {
@@ -231,6 +237,19 @@ export async function startSwarmApp() {
     writeConfigToUrl();
   }
 
+  function setPlacementMode(nextPlacementMode: PlacementMode) {
+    if (nextPlacementMode === placementMode) {
+      return;
+    }
+
+    placementMode = nextPlacementMode;
+    placingRepellent = placementMode === "repellent";
+    syncControls();
+    if (cursorVisible) {
+      renderer?.setApplePreview(repellentX, repellentY, true, placingRepellent);
+    }
+  }
+
   async function resetDrawingSurface() {
     const generation = rendererGeneration + 1;
     rendererGeneration = generation;
@@ -296,7 +315,7 @@ export async function startSwarmApp() {
       return;
     }
     event.preventDefault();
-    if ("shiftKey" in event && event.shiftKey) {
+    if (placementMode === "repellent") {
       plantRepellent(event);
       return;
     }
@@ -378,19 +397,16 @@ export async function startSwarmApp() {
     const { x, y } = canvasPointFromEvent(event, rect);
     repellentX = x;
     repellentY = y;
-    placingRepellent = event.shiftKey;
+    placingRepellent = placementMode === "repellent";
     cursorVisible = true;
     if (placingRepellent) {
       dismissHint();
     }
-    updateStatsText();
     renderer.setApplePreview(x, y, true, placingRepellent);
   }
 
   function hideApplePreview() {
-    placingRepellent = false;
     cursorVisible = false;
-    updateStatsText();
     renderer?.setApplePreview(0, 0, false);
   }
 
@@ -425,12 +441,20 @@ export async function startSwarmApp() {
   }
 
   function updateAppleStatsText() {
-    appleStats = apples.length === 0 ? "none" : apples.map(apple => `${Math.round(apple.volume * 100)}%`).join(" ");
+    if (apples.length === 0) {
+      appleStats = "0";
+      updateStatsText();
+      return;
+    }
+
+    const totalVolume = apples.reduce((sum, apple) => sum + clampNumber(apple.volume, 0, 1), 0);
+    const remainingPercent = Math.round(totalVolume / apples.length * 100);
+    appleStats = `${apples.length} (${remainingPercent}% left)`;
     updateStatsText();
   }
 
   function updateStatsText() {
-    const nextStatsText = `FPS: ${fps ?? "--"}\nApples: ${appleStats}\nMode: ${placingRepellent ? "Placing repellents" : "Placing apples"}`;
+    const nextStatsText = `FPS: ${fps ?? "--"}\nApples: ${appleStats}`;
     if (nextStatsText !== statsText) {
       stats.textContent = nextStatsText;
       statsText = nextStatsText;
@@ -488,16 +512,6 @@ export async function startSwarmApp() {
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-      placingRepellent = true;
-      dismissHint();
-      updateStatsText();
-      if (cursorVisible) {
-        renderer?.setApplePreview(repellentX, repellentY, true, true);
-      }
-      return;
-    }
-
     if (event.code !== "Space" || event.repeat || isControlElement(event.target)) {
       return;
     }
@@ -506,24 +520,11 @@ export async function startSwarmApp() {
     setPaused(!paused);
   }
 
-  function handleKeyUp(event: KeyboardEvent) {
-    if (event.code !== "ShiftLeft" && event.code !== "ShiftRight") {
-      return;
-    }
-
-    placingRepellent = false;
-    updateStatsText();
-    if (cursorVisible) {
-      renderer?.setApplePreview(repellentX, repellentY, true, false);
-    }
-  }
-
   addEventListener("resize", resize);
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", resize);
   }
   addEventListener("keydown", handleKeyDown);
-  addEventListener("keyup", handleKeyUp);
   canvas.addEventListener("pointermove", updateApplePreview);
   canvas.addEventListener("pointerleave", hideApplePreview);
   canvas.addEventListener("pointercancel", hideApplePreview);
@@ -534,6 +535,8 @@ export async function startSwarmApp() {
   resetApplesButton.addEventListener("click", resetSimulation);
   linesModeButton.addEventListener("click", () => setRenderMode("lines"));
   trianglesModeButton.addEventListener("click", () => setRenderMode("triangles"));
+  applePlacementButton.addEventListener("click", () => setPlacementMode("apple"));
+  repellentPlacementButton.addEventListener("click", () => setPlacementMode("repellent"));
   wormCountInput.addEventListener("input", () => setWormCount(wormCountInput.value));
   wormCountInput.addEventListener("change", () => setWormCount(wormCountInput.value));
   crazinessInput.addEventListener("input", () => setCraziness(crazinessInput.value));

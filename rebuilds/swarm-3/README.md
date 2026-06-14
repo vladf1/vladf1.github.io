@@ -36,9 +36,8 @@ npm run build
 
 ## User Controls
 
-- Click, tap, or pointer down on the canvas to place an apple.
-- Hold Shift and click to place a repellent.
-- Shift while moving the pointer switches the preview from apple mode to repellent mode.
+- Use the Apples/Repellents placement toggle to choose what canvas clicks place.
+- Click, tap, or pointer down on the canvas to place the selected marker.
 - Click an existing repellent marker while in repellent placement mode to remove it.
 - Press Space to pause or resume, unless focus is inside a control.
 - Use the bottom controls for worm count, craziness, speed, pause/resume, and reset.
@@ -182,4 +181,4 @@ For visual/runtime checks, run:
 npm run dev:swarm-3
 ```
 
-Then open `/rebuilds/swarm-3/`, place apples, place/remove repellents with Shift, change worm count, pause/resume, and resize the window.
+Then open `/rebuilds/swarm-3/`, place apples, switch to Repellents to place/remove repellents, change worm count, pause/resume, and resize the window.
