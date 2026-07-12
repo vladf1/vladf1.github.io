@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Swarm Benchmark</title>
+    <title>Swarm 2 WebGPU Benchmark</title>
     <style>
       :root {
         color-scheme: dark;
@@ -28,6 +28,12 @@
         margin: 0 0 14px;
         font-size: 24px;
         line-height: 1.2;
+      }
+
+      .description {
+        margin: -6px 0 16px;
+        color: #94a3b8;
+        font-size: 13px;
       }
 
       .controls {
@@ -83,45 +89,45 @@
         font-size: 14px;
       }
 
-      table {
-        width: 100%;
-        border-collapse: collapse;
+      .results {
+        display: grid;
+        grid-template-columns: 1.4fr repeat(2, 1fr);
         overflow: hidden;
         border: 1px solid #1f2937;
         border-radius: 8px;
-      }
-
-      th,
-      td {
-        padding: 10px 12px;
-        border-bottom: 1px solid #1f2937;
-        text-align: right;
-      }
-
-      th:first-child,
-      td:first-child {
-        text-align: left;
-      }
-
-      th {
-        color: #cbd5e1;
         background: #111827;
+      }
+
+      .metric {
+        padding: 16px;
+        border-left: 1px solid #1f2937;
+      }
+
+      .metric:first-child {
+        border-left: 0;
+      }
+
+      .metric-label {
+        display: block;
+        margin-bottom: 7px;
+        color: #cbd5e1;
         font-size: 12px;
+        font-weight: 700;
         text-transform: uppercase;
       }
 
-      td {
+      .metric-value {
+        font-size: 22px;
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
 
-      tr:last-child td {
-        border-bottom: 0;
+      .score .metric-value {
+        color: #7df9ff;
+        font-size: 34px;
       }
 
       .preview {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
         margin-top: 16px;
       }
 
@@ -140,15 +146,26 @@
           padding-top: 16px;
         }
 
-        .preview {
+        .results {
           grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .metric:first-child {
+          border: 0;
+          border-top: 1px solid #1f2937;
+        }
+
+        .metric:first-child {
+          border-top: 0;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>Swarm Benchmark</h1>
+      <h1>Swarm 2 WebGPU Benchmark</h1>
+      <p class="description">Score is median implied FPS after warm-up. Compare runs with identical settings.</p>
       <div class="controls">
         <label>
           Sprites
@@ -169,22 +186,22 @@
         <button id="runButton" type="button">Run</button>
       </div>
       <p id="status"></p>
-      <table>
-        <thead>
-          <tr>
-            <th>Renderer</th>
-            <th>Total ms</th>
-            <th>ms/frame</th>
-            <th>FPS</th>
-            <th>Speedup</th>
-          </tr>
-        </thead>
-        <tbody id="results"></tbody>
-      </table>
+      <section class="results" aria-label="Benchmark result">
+        <div class="metric score">
+          <span class="metric-label">WebGPU score · implied FPS · higher is better</span>
+          <span class="metric-value" id="score">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Median frame time</span>
+          <span class="metric-value" id="medianFrameTime">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Sample range</span>
+          <span class="metric-value" id="sampleRange">—</span>
+        </div>
+      </section>
       <div class="preview">
-        <canvas id="cpuCanvas" aria-label="CPU bitmap preview"></canvas>
-        <canvas id="webglCanvas" aria-label="GPU draw WebGL preview"></canvas>
-        <canvas id="webgpuComputeCanvas" aria-label="GPU motion and draw preview"></canvas>
+        <canvas id="webgpuCanvas" aria-label="WebGPU benchmark preview"></canvas>
       </div>
     </main>
     <script type="module" src="./swarm-benchmark.js"></script>

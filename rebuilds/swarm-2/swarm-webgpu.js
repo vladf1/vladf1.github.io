@@ -1,39 +1,10 @@
 import { Sprite, VERTICES_PER_LINE, loadShaders, setSpriteInteractionDistances } from "./swarm-common.js";
 
-function createWebgpuPresenter(device, format, shaderSource) {
-  const shader = device.createShaderModule({
-    code: shaderSource
-  });
-  const pipeline = device.createRenderPipeline({
-    layout: "auto",
-    vertex: {
-      module: shader,
-      entryPoint: "vertexMain"
-    },
-    fragment: {
-      module: shader,
-      entryPoint: "fragmentMain",
-      targets: [{ format }]
-    },
-    primitive: {
-      topology: "triangle-list"
-    }
-  });
-  const sampler = device.createSampler({
-    magFilter: "nearest",
-    minFilter: "nearest"
-  });
-  return {
-    pipeline,
-    sampler
-  };
-}
-
 function createWebgpuTrailTexture(device, format, width, height) {
   const texture = device.createTexture({
     size: [width, height],
     format,
-    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
   });
   return {
     texture,
@@ -199,7 +170,6 @@ export async function createWebgpuComputeRenderer(
     size: 4,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
-  const presenter = createWebgpuPresenter(device, format, shaders.present);
   const computeBindGroup = device.createBindGroup({
     layout: computePipeline.getBindGroupLayout(0),
     entries: [
@@ -248,9 +218,6 @@ export async function createWebgpuComputeRenderer(
     paramsBuffer,
     resolutionBuffer,
     fadeBuffer,
-    presentPipeline: presenter.pipeline,
-    presentSampler: presenter.sampler,
-    presentBindGroup: null,
     trailTexture: null,
     trailView: null,
     resize(nextWidth, nextHeight, nextRenderWidth = nextWidth, nextRenderHeight = nextHeight) {
@@ -263,7 +230,8 @@ export async function createWebgpuComputeRenderer(
       this.context.configure({
         device: this.device,
         format: this.format,
-        alphaMode: "opaque"
+        alphaMode: "opaque",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST
       });
       this.device.queue.writeBuffer(this.resolutionBuffer, 0, new Float32Array([nextWidth, nextHeight]));
       this.createTrailTexture();
@@ -352,33 +320,13 @@ export async function createWebgpuComputeRenderer(
       const trail = createWebgpuTrailTexture(this.device, this.format, this.renderWidth, this.renderHeight);
       this.trailTexture = trail.texture;
       this.trailView = trail.view;
-      this.presentBindGroup = this.device.createBindGroup({
-        layout: this.presentPipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.presentSampler
-          },
-          {
-            binding: 1,
-            resource: this.trailView
-          }
-        ]
-      });
     },
     presentTrail(encoder) {
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-        }]
-      });
-      pass.setPipeline(this.presentPipeline);
-      pass.setBindGroup(0, this.presentBindGroup);
-      pass.draw(6);
-      pass.end();
+      encoder.copyTextureToTexture(
+        { texture: this.trailTexture },
+        { texture: this.context.getCurrentTexture() },
+        [this.renderWidth, this.renderHeight]
+      );
     },
     finish() {
       return this.device.queue.onSubmittedWorkDone();
@@ -400,11 +348,10 @@ function createStorageBuffer(device, data) {
 }
 
 async function loadWebgpuShaders() {
-  const [present, compute, line, fade] = await loadShaders([
-    "webgpu-present.wgsl",
+  const [compute, line, fade] = await loadShaders([
     "webgpu-compute.wgsl",
     "webgpu-line.wgsl",
     "webgpu-fade.wgsl"
   ]);
-  return { present, compute, line, fade };
+  return { compute, line, fade };
 }

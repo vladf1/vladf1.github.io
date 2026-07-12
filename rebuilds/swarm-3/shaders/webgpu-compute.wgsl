@@ -12,7 +12,7 @@ struct SimParams {
 
 struct LineVertex {
   position: vec2f,
-  color: vec4f,
+  color: u32,
 };
 
 struct Apple {
@@ -21,7 +21,6 @@ struct Apple {
   radius: f32,
 };
 
-@group(0) @binding(0) var<storage, read_write> positions: array<vec4f>;
 @group(0) @binding(1) var<storage, read_write> motionA: array<vec4f>;
 @group(0) @binding(2) var<storage, read_write> motionB: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> motionC: array<vec4f>;
@@ -88,10 +87,9 @@ fn initMain(@builtin(global_invocation_id) id: vec3u) {
   let angle = randomBetween(index, 0.0, TWO_PI);
   let velocity = vec2f(speed * cos(angle), speed * sin(angle));
 
-  positions[index] = vec4f(startX, startY, startX, startY);
-  motionA[index] = vec4f(velocity, speed, crazinessPerMs);
-  motionB[index] = vec4f(offsetX, offsetY, 0.0, angle);
-  motionC[index] = vec4f(0.0, 0.0, 0.0, 0.0);
+  motionA[index] = vec4f(startX, startY, velocity);
+  motionB[index] = vec4f(angle, 0.0, 0.0, 0.0);
+  motionC[index] = vec4f(speed, crazinessPerMs, offsetX, offsetY);
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE)
@@ -116,14 +114,17 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let cursorRepellentRadius = params.cursorRepellent.w;
   let renderTriangles = params.reserved.w > 0.5;
 
-  var position = positions[index];
-  var velocity = motionA[index].xy;
-  let speed = motionA[index].z;
-  let crazinessPerMs = motionA[index].w;
-  let offset = motionB[index].xy;
-  var angle = motionB[index].w;
-  var angleStepPerMs = motionC[index].x;
-  var angleChangeMsLeft = motionC[index].y;
+  let dynamicMotionA = motionA[index];
+  let dynamicMotionB = motionB[index];
+  let staticMotion = motionC[index];
+  var position = dynamicMotionA.xy;
+  var velocity = dynamicMotionA.zw;
+  let speed = staticMotion.x;
+  let crazinessPerMs = staticMotion.y;
+  let offset = staticMotion.zw;
+  var angle = dynamicMotionB.x;
+  var angleStepPerMs = dynamicMotionB.y;
+  var angleChangeMsLeft = dynamicMotionB.z;
   let startPosition = position.xy;
   var attraction = vec2f(0.0, 0.0);
   var strongestPull = 0.0;
@@ -277,15 +278,6 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
     angleChangeMsLeft = 0.0;
   }
 
-  let triangleCenter = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let forward = vec2f(cos(angle), sin(angle));
-  let side = vec2f(-forward.y, forward.x);
-  let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let triangleSize = 3.6 + 2.2 * colorUnit((index * 1103515245u + 12345u) >> 16u);
-  let nose = triangleSize * 1.35;
-  let tail = triangleSize * 0.82;
-  let halfWidth = triangleSize * 0.62;
   let baseColor = wormColor(index);
   let appleTint = vec3f(1.0, 0.18, 0.05);
   let eatingTint = vec3f(1.0, 0.92, 0.3);
@@ -293,17 +285,25 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
   let attractedColor = mix(baseColor.rgb, appleTint, appleGlow * 0.65);
   let hungryColor = mix(attractedColor, eatingTint, eatingGlow * 0.55);
   let color = vec4f(mix(hungryColor, repellentTint, repellentGlow * 0.7), min(1.0, baseColor.a + appleGlow * 0.14 + repellentGlow * 0.2));
+  let packedColor = pack4x8unorm(color);
   if (renderTriangles) {
-    vertices[index * 3u] = LineVertex(triangleCenter + forward * nose, color);
-    vertices[index * 3u + 1u] = LineVertex(triangleCenter - forward * tail + side * halfWidth, color);
-    vertices[index * 3u + 2u] = LineVertex(triangleCenter - forward * tail - side * halfWidth, color);
+    let triangleCenter = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+    let forward = vec2f(cos(angle), sin(angle));
+    let side = vec2f(-forward.y, forward.x);
+    let triangleSize = 3.6 + 2.2 * colorUnit((index * 1103515245u + 12345u) >> 16u);
+    let nose = triangleSize * 1.35;
+    let tail = triangleSize * 0.82;
+    let halfWidth = triangleSize * 0.62;
+    vertices[index * 3u] = LineVertex(triangleCenter + forward * nose, packedColor);
+    vertices[index * 3u + 1u] = LineVertex(triangleCenter - forward * tail + side * halfWidth, packedColor);
+    vertices[index * 3u + 2u] = LineVertex(triangleCenter - forward * tail - side * halfWidth, packedColor);
   } else {
-    vertices[index * 2u] = LineVertex(clampedStart, color);
-    vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
+    let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+    let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
+    vertices[index * 2u] = LineVertex(clampedStart, packedColor);
+    vertices[index * 2u + 1u] = LineVertex(clampedEnd, packedColor);
   }
 
-  positions[index] = vec4f(nextPosition, nextPosition);
-  motionA[index] = vec4f(velocity, speed, crazinessPerMs);
-  motionB[index] = vec4f(offset, 0.0, angle);
-  motionC[index] = vec4f(angleStepPerMs, angleChangeMsLeft, 0.0, 0.0);
+  motionA[index] = vec4f(nextPosition, velocity);
+  motionB[index] = vec4f(angle, angleStepPerMs, angleChangeMsLeft, 0.0);
 }

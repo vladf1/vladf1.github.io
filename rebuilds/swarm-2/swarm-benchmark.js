@@ -2,18 +2,17 @@ import {
   DEFAULT_FADE_AMOUNT,
   DEFAULT_SPRITE_COUNT,
   FADE_AMOUNT_PER_MS_SCALE,
-  createCpuRenderer,
   createRandom,
   createSprites,
-  createWebgpuComputeRenderer,
-  createWebglRenderer,
-  updateSprites
+  createWebgpuComputeRenderer
 } from "./swarm.js";
 
-const DEFAULT_FRAME_COUNT = 180;
+const DEFAULT_FRAME_COUNT = 1200;
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const FIXED_ELAPSED_MS = 1000 / 60;
+const WARMUP_FRAME_COUNT = 6000;
+const SAMPLE_COUNT = 5;
 const SEED = 0x51a7f00d;
 
 const params = new URLSearchParams(location.search);
@@ -23,88 +22,31 @@ const canvasWidthInput = document.querySelector("#canvasWidth");
 const canvasHeightInput = document.querySelector("#canvasHeight");
 const runButton = document.querySelector("#runButton");
 const status = document.querySelector("#status");
-const results = document.querySelector("#results");
-const cpuCanvas = document.querySelector("#cpuCanvas");
-const webglCanvas = document.querySelector("#webglCanvas");
-const webgpuComputeCanvas = document.querySelector("#webgpuComputeCanvas");
+const score = document.querySelector("#score");
+const medianFrameTime = document.querySelector("#medianFrameTime");
+const sampleRange = document.querySelector("#sampleRange");
+const webgpuCanvas = document.querySelector("#webgpuCanvas");
 
 spriteCountInput.value = String(readPositiveInteger(params.get("NumberOfSprites"), DEFAULT_SPRITE_COUNT));
 frameCountInput.value = String(readPositiveInteger(params.get("Frames"), DEFAULT_FRAME_COUNT));
 canvasWidthInput.value = String(readPositiveInteger(params.get("Width"), DEFAULT_WIDTH));
 canvasHeightInput.value = String(readPositiveInteger(params.get("Height"), DEFAULT_HEIGHT));
 
-runButton.addEventListener("click", () => {
-  runBenchmark();
-});
-
-requestAnimationFrame(() => {
-  runBenchmark();
-});
+runButton.addEventListener("click", runBenchmark);
+requestAnimationFrame(runBenchmark);
 
 async function runBenchmark() {
   const config = readConfig();
   writeConfigToUrl(config);
   runButton.disabled = true;
-  results.textContent = "";
-  status.textContent = `Running ${config.spriteCount.toLocaleString()} sprites for ${config.frameCount.toLocaleString()} frames...`;
+  clearResult();
+  status.textContent = "Initializing WebGPU...";
   await waitForPaint();
 
-  const motionResult = runMotionBenchmark(config);
-  addResultRow(motionResult, null);
-  await waitForPaint();
-
-  const cpuResult = await runRendererBenchmark("CPU bitmap", createCpuRenderer, cpuCanvas, config);
-  addResultRow(cpuResult, cpuResult);
-  await waitForPaint();
-
-  const webglResult = await runRendererBenchmark("GPU draw (WebGL)", createWebglRenderer, webglCanvas, config);
-  addResultRow(webglResult, cpuResult);
-  await waitForPaint();
-
-  const webgpuComputeResult = await runWebgpuComputeBenchmark(config);
-  addResultRow(webgpuComputeResult, cpuResult);
-  status.textContent = `Done. GPU draw (WebGL) was ${formatSpeedup(cpuResult, webglResult)} and GPU motion + draw was ${webgpuComputeResult.supported ? formatSpeedup(cpuResult, webgpuComputeResult) : "unavailable"} compared with CPU bitmap.`;
-  runButton.disabled = false;
-}
-
-function runMotionBenchmark(config) {
-  const sprites = createBenchmarkSprites(config);
-  const motionState = createMotionState(config);
-  const started = performance.now();
-
-  for (let frame = 0; frame < config.frameCount; frame++) {
-    updateSprites(sprites, FIXED_ELAPSED_MS, motionState);
-  }
-
-  return createResult("Motion only", performance.now() - started, config);
-}
-
-async function runRendererBenchmark(name, createRenderer, canvas, config) {
-  const renderer = await createRenderer(canvas, config.width, config.height);
-  if (renderer === null) {
-    return createSkippedResult(name);
-  }
-
-  const sprites = createBenchmarkSprites(config);
-  const motionState = createMotionState(config);
-  const started = performance.now();
-
-  for (let frame = 0; frame < config.frameCount; frame++) {
-    const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
-    renderer.drawFrame(sprites, motionState, motionState.repelMode, FIXED_ELAPSED_MS, fadeAmount);
-  }
-
-  if ("finish" in renderer) {
-    await renderer.finish();
-  }
-  return createResult(name, performance.now() - started, config);
-}
-
-async function runWebgpuComputeBenchmark(config) {
-  const sprites = createBenchmarkSprites(config);
+  const sprites = createSprites(config.spriteCount, config.width, config.height, createRandom(SEED));
   const motionState = createMotionState(config);
   const renderer = await createWebgpuComputeRenderer(
-    webgpuComputeCanvas,
+    webgpuCanvas,
     config.width,
     config.height,
     config.width,
@@ -112,23 +54,53 @@ async function runWebgpuComputeBenchmark(config) {
     sprites,
     motionState
   );
+
   if (renderer === null) {
-    return createSkippedResult("GPU motion + draw");
+    status.textContent = "WebGPU is unavailable in this browser.";
+    runButton.disabled = false;
+    return;
   }
 
-  const started = performance.now();
-
-  for (let frame = 0; frame < config.frameCount; frame++) {
-    const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
-    renderer.drawFrame(sprites, motionState, motionState.repelMode, FIXED_ELAPSED_MS, fadeAmount);
-  }
-
+  status.textContent = `Warming up with ${WARMUP_FRAME_COUNT.toLocaleString()} frames...`;
+  await waitForPaint();
+  submitFrames(renderer, sprites, motionState, config, WARMUP_FRAME_COUNT);
   await renderer.finish();
-  return createResult("GPU motion + draw", performance.now() - started, config);
+
+  const samplesMsPerFrame = [];
+  for (let sample = 0; sample < SAMPLE_COUNT; sample++) {
+    status.textContent = `Measuring WebGPU sample ${sample + 1} of ${SAMPLE_COUNT}...`;
+    await waitForPaint();
+    const started = performance.now();
+    submitFrames(renderer, sprites, motionState, config, config.frameCount);
+    await renderer.finish();
+    samplesMsPerFrame.push((performance.now() - started) / config.frameCount);
+  }
+
+  const sortedSamples = samplesMsPerFrame.toSorted((a, b) => a - b);
+  const medianMsPerFrame = percentile(sortedSamples, 0.5);
+  const result = {
+    score: Math.round(1000 / medianMsPerFrame),
+    impliedFps: 1000 / medianMsPerFrame,
+    medianMsPerFrame,
+    minMsPerFrame: sortedSamples[0],
+    maxMsPerFrame: sortedSamples.at(-1),
+    samplesMsPerFrame,
+    sampleCount: SAMPLE_COUNT,
+    warmupFrameCount: WARMUP_FRAME_COUNT,
+    config
+  };
+
+  showResult(result);
+  Object.assign(window, { swarm2BenchmarkResult: result });
+  status.textContent = `Done. Median of ${SAMPLE_COUNT} samples; ${config.frameCount.toLocaleString()} measured frames per sample.`;
+  runButton.disabled = false;
 }
 
-function createBenchmarkSprites(config) {
-  return createSprites(config.spriteCount, config.width, config.height, createRandom(SEED));
+function submitFrames(renderer, sprites, motionState, config, frameCount) {
+  const fadeAmount = 1 - config.fadeAmountPerMs * FIXED_ELAPSED_MS;
+  for (let frame = 0; frame < frameCount; frame++) {
+    renderer.drawFrame(sprites, motionState, motionState.repelMode, FIXED_ELAPSED_MS, fadeAmount);
+  }
 }
 
 function createMotionState(config) {
@@ -141,38 +113,24 @@ function createMotionState(config) {
   };
 }
 
-function createResult(name, totalMs, config) {
-  const msPerFrame = totalMs / config.frameCount;
-  return {
-    name,
-    totalMs,
-    msPerFrame,
-    fps: 1000 / msPerFrame,
-    supported: true
-  };
+function showResult(result) {
+  score.textContent = formatNumber(result.score, 0);
+  medianFrameTime.textContent = `${formatNumber(result.medianMsPerFrame, 3)} ms`;
+  sampleRange.textContent = `${formatNumber(result.minMsPerFrame, 3)}–${formatNumber(result.maxMsPerFrame, 3)} ms`;
 }
 
-function createSkippedResult(name) {
-  return {
-    name,
-    totalMs: null,
-    msPerFrame: null,
-    fps: null,
-    supported: false
-  };
+function clearResult() {
+  score.textContent = "—";
+  medianFrameTime.textContent = "—";
+  sampleRange.textContent = "—";
 }
 
-function addResultRow(result, cpuResult) {
-  const row = document.createElement("tr");
-  const speedup = cpuResult === null || !result.supported ? "--" : `${(cpuResult.msPerFrame / result.msPerFrame).toFixed(2)}x`;
-  row.innerHTML = `
-    <td>${result.name}</td>
-    <td>${formatResultNumber(result.totalMs)}</td>
-    <td>${formatResultNumber(result.msPerFrame)}</td>
-    <td>${formatResultNumber(result.fps)}</td>
-    <td>${speedup}</td>
-  `;
-  results.append(row);
+function percentile(sortedValues, fraction) {
+  const index = (sortedValues.length - 1) * fraction;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index - lower;
+  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
 }
 
 function readConfig() {
@@ -207,17 +165,6 @@ function readPositiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function formatNumber(value) {
-  return value.toLocaleString(undefined, {
-    maximumFractionDigits: 2
-  });
-}
-
-function formatResultNumber(value) {
-  return value === null ? "unavailable" : formatNumber(value);
-}
-
-function formatSpeedup(cpuResult, result) {
-  const speedup = cpuResult.msPerFrame / result.msPerFrame;
-  return speedup >= 1 ? `${speedup.toFixed(2)}x faster` : `${(1 / speedup).toFixed(2)}x slower`;
+function formatNumber(value, maximumFractionDigits) {
+  return value.toLocaleString(undefined, { maximumFractionDigits });
 }
