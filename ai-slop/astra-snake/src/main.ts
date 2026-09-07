@@ -76,6 +76,7 @@ const timings: number[] = [];
 const cpuTimings: number[] = [];
 function frame(now: number) {
   const cpuStart = performance.now();
+  const wasDying = game.phase === 'dying';
   const rawDelta = (now - last) / 1000; last = now;
   // Never catch up a suspended tab or a multi-second OS hitch into a wall.
   if (rawDelta > .5 && game.phase === 'playing' && !demo) suspend();
@@ -98,7 +99,6 @@ function frame(now: number) {
       ui.celebrateBest(isBest); bestSaved = true;
     }
   }
-  const wasDying = document.querySelector('#app')?.getAttribute('data-screen') === 'dying';
   ui.update(game, dt, demo);
   if (wasDying && game.phase === 'over' && game.score > bestBefore) audio.play('best');
   if (!document.hidden) view.render(game, dt, demo);

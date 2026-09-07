@@ -9,6 +9,10 @@ const MAX_DEBRIS = 160;
 const DEBRIS_LIFETIME = 2.4;
 const DEBRIS_FADE_SECONDS = .9;
 const RING_VERTICES = BODY_SIDES + 1;
+const BODY_PROFILE = Array.from({ length: RING_VERTICES }, (_, side) => {
+  const angle = side / BODY_SIDES * Math.PI * 2, sin = Math.sin(angle);
+  return { sin, cos: Math.cos(angle), color: new THREE.Color(sin < -.2 ? 0xc7df87 : sin > .7 ? 0x32c615 : 0x4ed426) };
+});
 const world = (c: Cell) => new THREE.Vector3(c.x - 9.5, .42, c.y - 9.5);
 type Particle = { position: THREE.Vector3; velocity: THREE.Vector3; life: number; maxLife: number; color: THREE.Color; size: number };
 type Debris = { position: THREE.Vector3; velocity: THREE.Vector3; rotation: THREE.Vector3; spin: THREE.Vector3; size: THREE.Vector3; life: number; color: THREE.Color };
@@ -41,9 +45,9 @@ export class ArenaRenderer {
   private matrix = new THREE.Object3D();
   private positionArray = new Float32Array(MAX_RINGS * RING_VERTICES * 3);
   private normalArray = new Float32Array(MAX_RINGS * RING_VERTICES * 3);
-  private colorArray = new Float32Array(MAX_RINGS * RING_VERTICES * 3);
   private uvArray = new Float32Array(MAX_RINGS * RING_VERTICES * 2);
-  private snakeColor = new THREE.Color();
+  private lengths = new Float32Array(MAX_RINGS);
+  private offsets = new Float32Array(MAX_RINGS * 2);
   private cameraShake = 0;
   private tongueTime = 0;
   private angle = Math.PI / 2;
@@ -77,7 +81,12 @@ export class ArenaRenderer {
     this.buildArena();
     this.snakeGeometry.setAttribute('position', new THREE.BufferAttribute(this.positionArray, 3).setUsage(THREE.DynamicDrawUsage));
     this.snakeGeometry.setAttribute('normal', new THREE.BufferAttribute(this.normalArray, 3).setUsage(THREE.DynamicDrawUsage));
-    this.snakeGeometry.setAttribute('color', new THREE.BufferAttribute(this.colorArray, 3).setUsage(THREE.DynamicDrawUsage));
+    // Every ring shares the same colors; upload them once for the full capacity.
+    const colors = new Float32Array(MAX_RINGS * RING_VERTICES * 3);
+    for (let ring = 0; ring < MAX_RINGS; ring++) for (let side = 0; side < RING_VERTICES; side++) {
+      BODY_PROFILE[side].color.toArray(colors, (ring * RING_VERTICES + side) * 3);
+    }
+    this.snakeGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     this.snakeGeometry.setAttribute('uv', new THREE.BufferAttribute(this.uvArray, 2).setUsage(THREE.DynamicDrawUsage));
     const skin = this.buildSkin();
     this.snakeMaterial.map = skin.color;
@@ -408,7 +417,7 @@ export class ArenaRenderer {
     samples.push(rounded.at(-1)!);
     const tangent = new THREE.Vector3();
     const rings = Math.min(MAX_RINGS, samples.length);
-    const lengths = new Float32Array(rings);
+    const { lengths, offsets } = this;
     for (let i = 1; i < rings; i++) lengths[i] = lengths[i - 1] + samples[i].distanceTo(samples[i - 1]);
     const totalLength = Math.max(.001, lengths[rings - 1]);
     // Grow into the adult proportions from 4 to 18 cells. Use the interpolated
@@ -418,7 +427,6 @@ export class ArenaRenderer {
     if (!this.reduced) {
       // A tiny travelling bend gives straight runs a living, muscular motion.
       // The head and tail stay on their paths; the body shifts at most .035 cell.
-      const offsets = new Float32Array(rings * 2);
       for (let i = 1; i < rings - 1; i++) {
         tangent.subVectors(samples[i + 1], samples[i - 1]).normalize();
         const envelope = Math.min(1, lengths[i] / 1.5) * Math.min(1, (totalLength - lengths[i]) / 1.5);
@@ -441,19 +449,17 @@ export class ArenaRenderer {
       const radiusSlope = change * 6 * u * (1 - u) / (zoneLength * totalLength) * thickness;
       const neckLift = .06 * Math.exp(-lengths[i] * 3) * thickness;
       for (let j = 0; j <= BODY_SIDES; j++) {
-        const a = j / BODY_SIDES * Math.PI * 2, nx = -tangent.z * Math.cos(a), ny = Math.sin(a), nz = tangent.x * Math.cos(a);
+        const { sin: ny, cos } = BODY_PROFILE[j], nx = -tangent.z * cos, nz = tangent.x * cos;
         const idx = (i * RING_VERTICES + j) * 3, uvIndex = (i * RING_VERTICES + j) * 2;
         this.positionArray[idx] = samples[i].x + nx * radius;
         this.positionArray[idx + 1] = .07 + radius * .90 + neckLift + ny * radius * .90;
         this.positionArray[idx + 2] = samples[i].z + nz * radius;
         this.normalArray[idx] = nx - tangent.x * radiusSlope; this.normalArray[idx + 1] = ny / .90; this.normalArray[idx + 2] = nz - tangent.z * radiusSlope;
         this.uvArray[uvIndex] = j / BODY_SIDES; this.uvArray[uvIndex + 1] = lengths[i] * .43;
-        this.snakeColor.setHex(ny < -.2 ? 0xc7df87 : ny > .7 ? 0x32c615 : 0x4ed426);
-        this.colorArray[idx] = this.snakeColor.r; this.colorArray[idx + 1] = this.snakeColor.g; this.colorArray[idx + 2] = this.snakeColor.b;
       }
     }
     this.snakeGeometry.setDrawRange(0, Math.max(0, (rings - 1) * BODY_SIDES * 6));
-    for (const attribute of ['position', 'normal', 'color', 'uv']) {
+    for (const attribute of ['position', 'normal', 'uv']) {
       const attr = this.snakeGeometry.getAttribute(attribute) as THREE.BufferAttribute;
       attr.clearUpdateRanges(); attr.addUpdateRange(0, rings * RING_VERTICES * attr.itemSize); attr.needsUpdate = true;
     }
