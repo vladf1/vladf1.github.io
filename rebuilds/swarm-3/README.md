@@ -86,14 +86,14 @@ Repellents are simpler. JavaScript owns the persistent list of repellent centers
 
 1. Upload queued apple placement data, if any.
 2. Update the shared params uniform buffer.
-3. Fade the offscreen trail texture.
-4. Run `webgpu-compute.wgsl` to update worm state and write line vertices.
-5. Run `webgpu-apple.wgsl` to shrink/remove apples and write apple marker vertices when apples are active or placements are queued.
-6. Run the apple placement compute pass when new apples were queued.
-7. Draw worm line vertices into the trail texture.
-8. Optionally copy the apple buffer into the readback buffer.
-9. Present the trail texture to the canvas.
-10. Draw apple, repellent, and preview overlays onto the current canvas texture.
+3. Run `webgpu-compute.wgsl` to update worm state and write line vertices.
+4. Run `webgpu-apple.wgsl` to shrink/remove apples and write apple marker vertices when apples are active or placements are queued.
+5. Run the apple placement compute pass when new apples were queued.
+6. Fade the offscreen trail texture and draw worm vertices in the same render pass.
+7. Optionally copy the apple buffer into the readback buffer.
+8. Present the trail texture and draw apple, repellent, and preview overlays in one canvas render pass, preserving their draw order.
+
+Below 100,000 worms, the steady frame uses three passes without apples, or four with apples. Placement adds one compute pass. At 100,000 worms and above, fading runs before simulation and overlays use separate passes to retain the original GPU scheduling; benchmarking showed that always combining passes slowed the large-swarm cases.
 
 The trail effect depends on rendering worm lines into the offscreen trail texture, fading that texture, and then presenting it. Do not collapse this into direct canvas rendering unless you are intentionally replacing the trail model.
 
@@ -138,7 +138,7 @@ Some matching constants are duplicated inside WGSL files because shaders cannot 
 ## WebGPU Details To Be Careful With
 
 - The renderer caches the adapter/device promise in `webgpuContextPromise`, so renderer recreation reuses the same WebGPU device.
-- `setWormCount()` can grow capacity without recreating every resource. Capacity grows in `WORM_CAPACITY_BUCKET_SIZE` buckets.
+- `setWormCount()` can grow capacity without recreating every resource. Small swarms reserve a power of two (at least 1,024 worms); large allocations grow in `WORM_CAPACITY_BUCKET_SIZE` buckets. The default 5,000 worms reserve 8,192 slots.
 - New worm ranges are initialized by `initWormRange(...)`; if you bypass it, new buffer ranges may contain undefined motion state.
 - Apple shrinking uses integer atomics. Worms call `atomicAdd(&appleEaters[index], 1u)`, then the apple compute pass converts eater counts into volume loss.
 - Apple placement uses a GPU free-list. Resetting apples must reset the apple buffer, eater buffer, free slots, free count, vertex buffer, and queued placement count.
@@ -182,3 +182,5 @@ npm run dev:swarm-3
 ```
 
 Then open `/rebuilds/swarm-3/`, place apples, switch to Repellents to place/remove repellents, change worm count, pause/resume, and resize the window.
+
+For repeatable before/after performance measurements and deterministic GPU-state/image checks, see [the Swarm performance report](../../tools/swarm-performance.md).

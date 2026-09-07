@@ -107,7 +107,8 @@ export async function startSwarmApp() {
     const frameFadeAmount = 1 - fadeAmountPerMs * elapsedMs;
     renderer.drawFrame(sprites, motionState, repelMode, elapsedMs, frameFadeAmount);
 
-    stats.textContent = `FPS: ${fps ?? "--"}`;
+    const statsText = `FPS: ${fps ?? "--"}`;
+    if (stats.textContent !== statsText) stats.textContent = statsText;
     framesRendered++;
     pendingAnimationFrameId = requestAnimationFrame(renderFrame);
   }
@@ -183,22 +184,30 @@ export async function startSwarmApp() {
     const generation = rendererGeneration + 1;
     rendererGeneration = generation;
     rendererReady = false;
+    renderer?.destroy?.();
+    renderer = null;
     const nextContextType = getRendererContextType(rendererMode);
     if (activeContextType !== null && activeContextType !== nextContextType) {
       replaceCanvasElement();
     }
-    renderer = await createRendererForMode(rendererMode);
+    let nextRenderer = await createRendererForMode(rendererMode);
     if (generation !== rendererGeneration) {
+      nextRenderer?.destroy?.();
       return;
     }
-    if (renderer === null) {
+    if (nextRenderer === null) {
       rendererMode = RendererMode.webgl;
       rendererModeInput.value = rendererMode;
       if (nextContextType !== getRendererContextType(rendererMode)) {
         replaceCanvasElement();
       }
-      renderer = await createRendererForMode(rendererMode);
+      nextRenderer = await createRendererForMode(rendererMode);
+      if (generation !== rendererGeneration) {
+        nextRenderer?.destroy?.();
+        return;
+      }
     }
+    renderer = nextRenderer;
     activeContextType = getRendererContextType(rendererMode);
     lastAnimated = 0;
     lastTimed = performance.now();

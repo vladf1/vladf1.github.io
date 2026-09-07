@@ -9,7 +9,7 @@ struct SimParams {
 
 struct LineVertex {
   position: vec2f,
-  color: vec4f,
+  color: u32,
 };
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec4f>;
@@ -137,7 +137,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3u) {
 
   let clampedStart = clamp(startPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
   let clampedEnd = clamp(nextPosition, vec2f(0.0, 0.0), vec2f(width - 1.0, height - 1.0));
-  let color = select(colors[index], vec4f(1.0, 1.0, 1.0, 1.0), repelMode);
+  let color = pack4x8unorm(select(colors[index], vec4f(1.0, 1.0, 1.0, 1.0), repelMode));
   vertices[index * 2u] = LineVertex(clampedStart, color);
   vertices[index * 2u + 1u] = LineVertex(clampedEnd, color);
 

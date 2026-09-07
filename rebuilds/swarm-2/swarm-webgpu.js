@@ -34,7 +34,7 @@ export async function createWebgpuComputeRenderer(
   const context = canvas.getContext("webgpu");
   const format = navigator.gpu.getPreferredCanvasFormat();
   const spriteCount = sprites.length;
-  const computeVertexStride = 32;
+  const computeVertexStride = 16;
   const lineVertexCount = spriteCount * VERTICES_PER_LINE;
   const positionData = new Float32Array(spriteCount * 4);
   const motionAData = new Float32Array(spriteCount * 4);
@@ -104,8 +104,8 @@ export async function createWebgpuComputeRenderer(
           },
           {
             shaderLocation: 1,
-            offset: 16,
-            format: "float32x4"
+            offset: 8,
+            format: "unorm8x4"
           }
         ]
       }]
@@ -218,6 +218,8 @@ export async function createWebgpuComputeRenderer(
     paramsBuffer,
     resolutionBuffer,
     fadeBuffer,
+    paramsData: new Float32Array(12),
+    fadeData: new Float32Array(1),
     trailTexture: null,
     trailView: null,
     resize(nextWidth, nextHeight, nextRenderWidth = nextWidth, nextRenderHeight = nextHeight) {
@@ -257,7 +259,7 @@ export async function createWebgpuComputeRenderer(
     },
     drawFrame(sprites, motionState, repelMode, elapsedMs, fadeAmount) {
       this.updateSprites(sprites, elapsedMs, motionState);
-      this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([
+      this.paramsData.set([
         this.width,
         this.height,
         this.motionState.pointerX,
@@ -270,28 +272,15 @@ export async function createWebgpuComputeRenderer(
         Sprite.changeDirectionMs,
         Sprite.maxRandomAngleChange,
         this.spriteCount
-      ]));
+      ]);
+      this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
 
       if (fadeAmount !== null) {
-        const fadeAlpha = Math.max(0, Math.min(1, 1 - fadeAmount));
-        this.device.queue.writeBuffer(this.fadeBuffer, 0, new Float32Array([fadeAlpha]));
+        this.fadeData[0] = Math.max(0, Math.min(1, 1 - fadeAmount));
+        this.device.queue.writeBuffer(this.fadeBuffer, 0, this.fadeData);
       }
 
       const encoder = this.device.createCommandEncoder();
-      if (fadeAmount !== null) {
-        const fadePass = encoder.beginRenderPass({
-          colorAttachments: [{
-            view: this.trailView,
-            loadOp: "load",
-            storeOp: "store"
-          }]
-        });
-        fadePass.setPipeline(this.fadePipeline);
-        fadePass.setBindGroup(0, this.fadeBindGroup);
-        fadePass.draw(6);
-        fadePass.end();
-      }
-
       const computePass = encoder.beginComputePass();
       computePass.setPipeline(this.computePipeline);
       computePass.setBindGroup(0, this.computeBindGroup);
@@ -305,6 +294,12 @@ export async function createWebgpuComputeRenderer(
           storeOp: "store"
         }]
       });
+      // Fade and lines share an attachment; keep it in one render pass.
+      if (fadeAmount !== null) {
+        linePass.setPipeline(this.fadePipeline);
+        linePass.setBindGroup(0, this.fadeBindGroup);
+        linePass.draw(6);
+      }
       linePass.setPipeline(this.linePipeline);
       linePass.setBindGroup(0, this.lineBindGroup);
       linePass.setVertexBuffer(0, this.vertexBuffer);
@@ -330,6 +325,11 @@ export async function createWebgpuComputeRenderer(
     },
     finish() {
       return this.device.queue.onSubmittedWorkDone();
+    },
+    destroy() {
+      this.trailTexture?.destroy();
+      // This renderer owns its device and every buffer/pipeline on it.
+      this.device.destroy();
     }
   };
 

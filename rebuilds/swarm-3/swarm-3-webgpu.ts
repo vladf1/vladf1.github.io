@@ -39,6 +39,7 @@ const LINE_VERTICES_PER_WORM = 2;
 const TRIANGLE_VERTICES_PER_WORM = 3;
 const MAX_APPLE_PLACEMENTS_PER_FRAME = 32;
 const WORM_CAPACITY_BUCKET_SIZE = 250000;
+const SEPARATE_RENDER_WORM_COUNT = 100000;
 const FLOATS_PER_WORM_VEC4_BUFFER = 4;
 const BYTES_PER_WORM_VEC4_BUFFER = FLOATS_PER_WORM_VEC4_BUFFER * Float32Array.BYTES_PER_ELEMENT;
 const BYTES_PER_RANDOM_STATE = Uint32Array.BYTES_PER_ELEMENT;
@@ -499,14 +500,14 @@ export async function createWebgpuComputeRenderer(
         this.device.queue.writeBuffer(this.fadeBuffer, 0, this.fadeData);
       }
       const encoder = this.device.createCommandEncoder();
-      if (fadeAmount !== null) {
+      // At large counts, submit fading before simulation so the GPU can overlap
+      // them. Smaller swarms benefit more from avoiding the extra render pass.
+      const separateFade = fadeAmount !== null && this.wormCount >= SEPARATE_RENDER_WORM_COUNT;
+      if (separateFade) {
         const fadePass = beginRenderPass(encoder, this.trailView);
-        fadePass.setPipeline(this.fadeTrailImagePipeline);
-        fadePass.setBindGroup(0, this.fadeBindGroup);
-        fadePass.draw(6);
+        this.drawTrailFade(fadePass);
         fadePass.end();
       }
-
       runComputePass(encoder, this.updateWormStateAndWriteLineVerticesPipeline, this.computeBindGroup, Math.ceil(this.wormCount / 256));
       if (hasAppleWork) {
         runComputePass(encoder, this.updateAppleStateAndWriteAppleShapeVerticesPipeline, this.appleBindGroup, Math.ceil(activeAppleSlotCount / 64));
@@ -517,6 +518,10 @@ export async function createWebgpuComputeRenderer(
       }
 
       const wormPass = beginRenderPass(encoder, this.trailView, fadeAmount === null ? "clear" : "load");
+      // Simulation does not sample the trail, so fading can share the worm pass.
+      if (fadeAmount !== null && !separateFade) {
+        this.drawTrailFade(wormPass);
+      }
       if (this.renderMode === "triangles") {
         wormPass.setPipeline(this.drawBufferedTriangleVerticesPipeline);
         wormPass.setBindGroup(0, this.triangleBindGroup);
@@ -534,12 +539,20 @@ export async function createWebgpuComputeRenderer(
         encoder.copyBufferToBuffer(this.appleBuffer, 0, this.appleReadbackBuffer, 0, this.appleData.byteLength);
       }
       const targetView = this.context.getCurrentTexture().createView();
-      this.presentTrail(encoder, targetView);
+      let presentPass = this.beginPresentTrail(encoder, targetView);
       if (hasAppleWork) {
-        this.drawAppleOverlay(encoder, targetView);
+        presentPass = this.beginOverlayPass(encoder, targetView, presentPass);
+        this.drawAppleOverlay(presentPass);
       }
-      this.drawRepellentOverlay(encoder, targetView);
-      this.drawApplePreview(encoder, targetView);
+      if (this.repellentCount > 0) {
+        presentPass = this.beginOverlayPass(encoder, targetView, presentPass);
+        this.drawRepellentOverlay(presentPass);
+      }
+      if (this.applePreviewVisible) {
+        presentPass = this.beginOverlayPass(encoder, targetView, presentPass);
+        this.drawApplePreview(presentPass);
+      }
+      presentPass.end();
       this.device.queue.submit([encoder.finish()]);
       this.applePlacementCount = 0;
       if (shouldReadApples) {
@@ -625,35 +638,50 @@ export async function createWebgpuComputeRenderer(
       });
     }
 
+    drawTrailFade(pass: GPURenderPassEncoder) {
+      pass.setPipeline(this.fadeTrailImagePipeline);
+      pass.setBindGroup(0, this.fadeBindGroup);
+      pass.draw(6);
+    }
+
     presentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
+      this.beginPresentTrail(encoder, targetView).end();
+    }
+
+    beginPresentTrail(encoder: GPUCommandEncoder, targetView?: GPUTextureView) {
       const view = targetView ?? this.context.getCurrentTexture().createView();
       const pass = beginRenderPass(encoder, view, "clear");
       pass.setPipeline(this.copyTrailImageToCanvasPipeline);
       pass.setBindGroup(0, this.presentBindGroup);
       pass.draw(6);
-      pass.end();
+      return pass;
     }
 
-    drawAppleOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
-      const pass = beginRenderPass(encoder, targetView);
+    drawAppleOverlay(pass: GPURenderPassEncoder) {
       pass.setPipeline(this.drawBufferedMarkerVerticesPipeline);
       pass.setBindGroup(0, this.markerBindGroup);
       pass.setVertexBuffer(0, this.appleVertexBuffer);
       pass.draw(this.activeAppleSlotCount * VERTICES_PER_APPLE_MARKER);
-      pass.end();
     }
 
-    drawRepellentOverlay(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
+    beginOverlayPass(encoder: GPUCommandEncoder, targetView: GPUTextureView, pass: GPURenderPassEncoder) {
+      // Preserve the original scheduling for geometry-bound large swarms.
+      if (this.wormCount >= SEPARATE_RENDER_WORM_COUNT) {
+        pass.end();
+        return beginRenderPass(encoder, targetView);
+      }
+      return pass;
+    }
+
+    drawRepellentOverlay(pass: GPURenderPassEncoder) {
       if (this.repellentCount === 0) {
         return;
       }
 
-      const pass = beginRenderPass(encoder, targetView);
       pass.setPipeline(this.drawBufferedMarkerVerticesPipeline);
       pass.setBindGroup(0, this.markerBindGroup);
       pass.setVertexBuffer(0, this.repellentVertexBuffer);
       pass.draw(this.repellentCount * VERTICES_PER_REPELLENT_MARKER);
-      pass.end();
     }
 
     setApplePreview(x: number, y: number, visible: boolean, repellent = false) {
@@ -662,16 +690,14 @@ export async function createWebgpuComputeRenderer(
       this.device.queue.writeBuffer(this.applePreviewBuffer, 0, this.applePreviewData);
     }
 
-    drawApplePreview(encoder: GPUCommandEncoder, targetView: GPUTextureView) {
+    drawApplePreview(pass: GPURenderPassEncoder) {
       if (!this.applePreviewVisible) {
         return;
       }
 
-      const pass = beginRenderPass(encoder, targetView);
       pass.setPipeline(this.drawApplePreviewRingsPipeline);
       pass.setBindGroup(0, this.previewBindGroup);
       pass.draw(VERTICES_PER_PREVIEW_MARKER);
-      pass.end();
     }
 
     readApples() {
@@ -963,8 +989,11 @@ function getMaxSupportedWormCount(gpuLimitsSource: { limits: GPUSupportedLimits 
 }
 
 function getWormCapacity(wormCount: number, maxSupportedWormCount: number) {
+  // Small swarms should not reserve space for 250,000 worms. Keep geometric
+  // headroom for edits, then use the existing buckets for large allocations.
+  const bucketSize = Math.min(WORM_CAPACITY_BUCKET_SIZE, Math.max(1024, 2 ** Math.ceil(Math.log2(wormCount))));
   return Math.min(
     maxSupportedWormCount,
-    Math.ceil(wormCount / WORM_CAPACITY_BUCKET_SIZE) * WORM_CAPACITY_BUCKET_SIZE
+    Math.ceil(wormCount / bucketSize) * bucketSize
   );
 }
