@@ -31,6 +31,8 @@ The homepage links to:
 - `silverlight-ports/fireworks/`
 - `silverlight-ports/vector-defence/`
 
+Hibiscus is maintained separately in [hibiscus-3d](https://github.com/vladf1/hibiscus-3d) and [runs here](https://fridman.me/hibiscus-3d/).
+
 There is also an external link to
 [vector defence 2026](https://vladf1.github.io/vector-defence-2026/).
 
