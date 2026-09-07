@@ -9,6 +9,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: "index.html",
+        astraSnake: "ai-slop/astra-snake/index.html",
         balls: "canvas-experiments/balls/index.html",
         ballsWebgpu: "rebuilds/balls-webgpu/index.html",
         clickMe: "canvas-experiments/click-me/index.html",

@@ -28,3 +28,7 @@ dist-ssr/
 # Environment files
 .env
 .env.*
+
+# Browser test artifacts
+test-results/
+playwright-report/

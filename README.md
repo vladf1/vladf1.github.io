@@ -11,6 +11,7 @@ canvas experiments, rebuilds, and TypeScript ports of old Silverlight projects.
 - `public/favicon.ico` - site icon copied into the build.
 - `canvas-experiments/` - archived browser canvas projects.
 - `canvas-experiments/shared/` - ES module helpers used by bundled canvas experiments.
+- `ai-slop/astra-snake/` - Astra Snake, a Three.js arcade game.
 - `rebuilds/` - rebuilt versions of older browser projects.
 - `silverlight-ports/` - TypeScript ports of old Silverlight projects.
 - `public/shared/` - vendored browser globals used by the classic pages.
@@ -19,6 +20,7 @@ canvas experiments, rebuilds, and TypeScript ports of old Silverlight projects.
 
 The homepage links to:
 
+- `ai-slop/astra-snake/`
 - `canvas-experiments/balls/`
 - `canvas-experiments/swarm/`
 - `canvas-experiments/js-fireworks/`
@@ -53,6 +55,7 @@ npm run dev
 Project-specific dev scripts open individual projects for convenience:
 
 ```bash
+npm run dev:astra-snake
 npm run dev:swarm-2
 npm run dev:swarm-3
 npm run dev:fireworks

@@ -11,11 +11,19 @@
     "dev:swarm-port": "vite --host 127.0.0.1 --open /silverlight-ports/swarm/",
     "dev:vector-defence": "vite --host 127.0.0.1 --open /silverlight-ports/vector-defence/",
     "dev:swarm-3:https": "vite --host 0.0.0.0 --config vite.https.config.ts --open /rebuilds/swarm-3/",
-    "build": "tsc -p tsconfig.json && vite build"
+    "build": "tsc -p tsconfig.json && tsc -p ai-slop/astra-snake/tsconfig.json && vite build",
+    "dev:astra-snake": "vite --host 127.0.0.1 --open /ai-slop/astra-snake/",
+    "test:astra-snake": "node --test ai-slop/astra-snake/tests/*.test.ts",
+    "test:astra-snake:browser": "playwright test --config ai-slop/astra-snake/playwright.config.ts"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.71",
     "typescript": "^7.0.2",
-    "vite": "^8.1.4"
+    "vite": "^8.1.4",
+    "@types/three": "0.185.4",
+    "@playwright/test": "1.63.0"
+  },
+  "dependencies": {
+    "three": "0.185.1"
   }
 }
