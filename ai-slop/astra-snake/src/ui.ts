@@ -6,6 +6,7 @@ const icons = {
   muted: '<path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m16 9 6 6m0-6-6 6"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   effects: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/>',
+  lightning: '<path d="m13 2-9 12h7l-1 8 10-13h-8l1-7Z"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   crown: '<path d="m3 7 4 4 5-6 5 6 4-4-2 12H5L3 7Z"/>',
 };
@@ -35,7 +36,7 @@ export class Interface {
           <div class="stat speed-stat"><span class="eyebrow">SPEED</span><strong><span id="level">01</span><span class="stat-unit" id="speed"> / 7.0</span></strong></div>
         </div>
         <div class="toolbar">
-          <button class="icon-button" id="effects" aria-label="Turn off flashes and camera shake" title="Flashes & camera shake">${icon('effects')}</button>
+          <button class="icon-button" id="effects" aria-label="Turn off flashes and camera shake">${icon('lightning')}</button>
           <button class="icon-button" id="sound" aria-label="Mute sound" title="Sound · M">${icon('sound')}</button>
           <button class="icon-button" id="pause" aria-label="Pause game" title="Pause · Esc or P">${icon('pause')}</button>
         </div>
@@ -100,6 +101,7 @@ export class Interface {
     this.get('sound').setAttribute('aria-label', this.preferences.sound ? 'Mute sound' : 'Enable sound');
     this.get('sound').setAttribute('aria-pressed', String(this.preferences.sound));
     this.get('effects').setAttribute('aria-label', this.preferences.effects ? 'Turn off flashes and camera shake' : 'Turn on flashes and camera shake');
+    this.get('effects').setAttribute('data-tooltip', `Flashes & camera shake: ${this.preferences.effects ? 'on' : 'off'}. Click to ${this.preferences.effects ? 'disable' : 'enable'}.`);
     this.get('effects').setAttribute('aria-pressed', String(this.preferences.effects));
   }
   reset() { this.newBest = false; this.lastScore = -1; this.toastTime = 0; this.get('toast').classList.remove('visible'); this.get('score').getAnimations().forEach(animation => animation.cancel()); }

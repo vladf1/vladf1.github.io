@@ -25,6 +25,9 @@ button:active:not(:disabled){transform:translateY(1px)}
 .toolbar{display:flex;gap:6px}
 .icon-button{width:38px;height:38px;border:1px solid #31424b;background:#10202a65;border-radius:50%;display:grid;place-items:center;color:#bbcec9;transition:background .15s,border-color .15s}
 .icon-button:hover{background:#223a42;border-color:#6c978d}
+#effects{position:relative}
+#effects::after{content:attr(data-tooltip);position:absolute;top:calc(100% + 10px);right:0;width:220px;padding:10px 12px;border:1px solid #6c978d;border-radius:8px;background:#10202a;color:#e6f1ed;font-size:13px;line-height:1.5;text-align:left;pointer-events:none;visibility:hidden;z-index:10}
+#effects:hover::after,#effects:focus-visible::after{visibility:visible}
 .icon-button[aria-pressed=false]{color:#657680}
 .workspace{position:relative;min-height:0;width:100%;max-width:1600px;margin:auto;height:100%}
 .arena-aura{position:absolute;left:20%;right:0;top:6%;bottom:0;background:radial-gradient(ellipse,#23625918,transparent 62%);pointer-events:none}
