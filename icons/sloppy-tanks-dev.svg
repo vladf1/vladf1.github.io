@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64">
+<title>Sloppy Tanks Dev Build — broken blue Bruiser</title>
+<defs><linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="39" y1="14.7" x2="30.1" y2="14.7"><stop offset="0" stop-color="#454f55"/><stop offset="0.07" stop-color="#454f55"/><stop offset="0.25" stop-color="#454f55"/><stop offset="0.5" stop-color="#5c6972"/><stop offset="0.75" stop-color="#72828d"/><stop offset="0.93" stop-color="#7c8e9a"/><stop offset="1" stop-color="#778894"/></linearGradient>
+<linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="29.1" y1="30.8" x2="24.1" y2="22.2"><stop offset="0" stop-color="#454f55"/><stop offset="0.07" stop-color="#454f55"/><stop offset="0.25" stop-color="#454f55"/><stop offset="0.5" stop-color="#65737d"/><stop offset="0.75" stop-color="#7f919d"/><stop offset="0.93" stop-color="#899ca9"/><stop offset="1" stop-color="#81939f"/></linearGradient>
+<linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="24.7" y1="30.4" x2="22.3" y2="26.2"><stop offset="0" stop-color="#454f55"/><stop offset="0.07" stop-color="#454f55"/><stop offset="0.25" stop-color="#454f55"/><stop offset="0.5" stop-color="#65737d"/><stop offset="0.75" stop-color="#7f919d"/><stop offset="0.93" stop-color="#899ca9"/><stop offset="1" stop-color="#81939f"/></linearGradient>
+<linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="15.7" y1="38.4" x2="10.8" y2="30"><stop offset="0" stop-color="#454f55"/><stop offset="0.07" stop-color="#454f55"/><stop offset="0.25" stop-color="#454f55"/><stop offset="0.5" stop-color="#65737d"/><stop offset="0.75" stop-color="#7f919d"/><stop offset="0.93" stop-color="#899ca9"/><stop offset="1" stop-color="#81939f"/></linearGradient>
+<g id="t">
+<path d="M1.6 36.8 2.1 34.5 3.4 32.3 5.1 30.7 31 15.8 32.8 15.3 34.1 16 38.8 18.7 40.1 19.5 40.5 21.2 40.1 23.6 38.8 25.8 37 27.4 34.1 29 14 40.6 11.1 42.3 9.3 42.8 3.4 39.3 2.1 38.6Z" fill="#2b3646"/>
+<path d="M2.1 38.6 1.6 36.8 7.6 40.3 8 42Z" fill="#34404f"/>
+<path d="M2.1 34.5 3.4 32.3 9.3 35.7 8 38Z" fill="#4d5f75"/>
+<path d="M5.1 30.7 8 29.1 14 32.5 11.1 34.2Z" fill="#445467"/>
+<path d="M10.9 27.4 13.8 25.7 19.7 29.2 16.8 30.9Z" fill="#445467"/>
+<path d="M16.6 24.1 19.5 22.4 25.5 25.9 22.6 27.5Z" fill="#445467"/>
+<path d="M22.4 20.8 25.3 19.1 31.2 22.5 28.4 24.2Z" fill="#445467"/>
+<path d="M28.2 17.4 31 15.8 37 19.2 34.1 20.9Z" fill="#445467"/>
+<path d="M32.8 15.3 34.1 16 40.1 19.5 38.8 18.7Z" fill="#28313c"/>
+<path d="M55.6 32.7 28.9 48.1 26.3 46.3 31.7 38.9 55 25.5 56.7 28.1Z" fill="#0f4880"/>
+<path d="M6.4 34.8 11.8 27.4 31.7 38.9 26.3 46.3Z" fill="#63d1ff"/>
+<path d="M11.8 27.4 35.1 14 55 25.5 31.7 38.9Z" fill="#1d8cf8"/>
+<path d="M23.5 49.5 23.9 47.2 25.2 44.9 27 43.4 29.9 41.7 52.9 28.4 54.7 27.9 56 28.7 61.9 32.1 62.4 33.9 61.9 36.2 60.6 38.4 58.9 40 44.5 48.3 41.6 50 33 54.9 31.2 55.4 29.9 54.7 25.2 52 23.9 51.2Z" fill="#2b3646"/>
+<path d="M23.9 51.2 23.5 49.5 29.4 52.9 29.9 54.7Z" fill="#34404f"/>
+<path d="M23.9 47.2 25.2 44.9 31.2 48.4 29.9 50.6Z" fill="#4d5f75"/>
+<path d="M27 43.4 29.9 41.7 35.8 45.1 33 46.8Z" fill="#445467"/>
+<path d="M32.8 40 35.6 38.4 41.6 41.8 38.7 43.5Z" fill="#445467"/>
+<path d="M38.5 36.7 41.4 35.1 47.4 38.5 44.5 40.2Z" fill="#445467"/>
+<path d="M44.3 33.4 47.2 31.7 53.1 35.2 50.2 36.8Z" fill="#445467"/>
+<path d="M50 30.1 52.9 28.4 58.9 31.8 56 33.5Z" fill="#445467"/>
+<path d="M54.7 27.9 56 28.7 61.9 32.1 60.6 31.4Z" fill="#28313c"/>
+<path d="M58.9 31.8 33 46.8A5 2.9 -60 0 0 33 54.9L58.9 40A5 2.9 -60 0 0 58.9 31.8Z" fill="#161c24"/>
+<ellipse cx="58.9" cy="35.9" rx="4" ry="2.3" transform="rotate(-60 58.9 35.9)" fill="#566572"/>
+<ellipse cx="58.6" cy="35.8" rx="3.2" ry="1.9" transform="rotate(-60 58.6 35.8)" fill="#728596"/>
+<ellipse cx="58.6" cy="35.7" rx="1.2" ry=".7" transform="rotate(-60 58.6 35.7)" fill="#d2e2ec"/>
+<ellipse cx="50.2" cy="40.9" rx="4" ry="2.3" transform="rotate(-60 50.2 40.9)" fill="#566572"/>
+<ellipse cx="50" cy="40.8" rx="3.2" ry="1.9" transform="rotate(-60 50 40.8)" fill="#728596"/>
+<ellipse cx="50" cy="40.7" rx="1.2" ry=".7" transform="rotate(-60 50 40.7)" fill="#d2e2ec"/>
+<ellipse cx="41.6" cy="45.9" rx="4" ry="2.3" transform="rotate(-60 41.6 45.9)" fill="#566572"/>
+<ellipse cx="41.4" cy="45.8" rx="3.2" ry="1.9" transform="rotate(-60 41.4 45.8)" fill="#728596"/>
+<ellipse cx="41.3" cy="45.7" rx="1.2" ry=".7" transform="rotate(-60 41.3 45.7)" fill="#d2e2ec"/>
+<ellipse cx="33" cy="50.9" rx="4" ry="2.3" transform="rotate(-60 33 50.9)" fill="#566572"/>
+<ellipse cx="32.7" cy="50.7" rx="3.2" ry="1.9" transform="rotate(-60 32.7 50.7)" fill="#728596"/>
+<ellipse cx="32.7" cy="50.7" rx="1.2" ry=".7" transform="rotate(-60 32.7 50.7)" fill="#d2e2ec"/>
+<path d="M51.3 26 32.9 36.6 33.1 35.2 51.3 24.7Z" fill="#081220"/>
+<path d="M15.8 26.8 16.1 25.3 33.1 35.2 32.9 36.6Z" fill="#10233f"/>
+<path d="M16.1 25.3 34.3 14.8 51.3 24.7 33.1 35.2Z" fill="#10233e"/>
+<path d="M50.2 24.7 33.1 34.5 35.4 25.3 48.5 17.8Z" fill="#0f4880"/>
+<path d="M17.2 25.3 19.5 16.1 35.4 25.3 33.1 34.5Z" fill="#1e91ff"/>
+<path d="M19.5 16.1 32.6 8.6 48.5 17.8 35.4 25.3Z" fill="#57b9f8"/>
+<path d="M39 13.3 39 14.7A4.4 2.6 0 0 1 30.1 14.7L30.1 13.3Z" fill="url(#g0)"/>
+<ellipse cx="34.6" cy="13.3" rx="4.4" ry="2.6" transform="rotate(0 34.6 13.3)" fill="#afc8d8"/>
+<path d="M26 32.6 29.1 30.8A5 2.9 60 0 0 24.1 22.2L21 24Z" fill="url(#g1)"/>
+<ellipse cx="23.5" cy="28.3" rx="5" ry="2.9" transform="rotate(60 23.5 28.3)" fill="#afc8d8"/>
+<path d="M13.9 36.6 24.7 30.4A2.4 1.4 60 0 0 22.3 26.2L11.5 32.4Z" fill="url(#g2)"/>
+<ellipse cx="12.7" cy="34.5" rx="2.4" ry="1.4" transform="rotate(60 12.7 34.5)" fill="#afc8d8"/>
+<g transform="translate(-1 1) rotate(-25 13.3 34.2)">
+<path d="M9.7 41.8 15.7 38.4A4.8 2.8 60 0 0 10.8 30L4.9 33.4Z" fill="url(#g3)"/>
+<ellipse cx="7.3" cy="37.6" rx="4.8" ry="2.8" transform="rotate(60 7.3 37.6)" fill="#afc8d8"/>
+<ellipse cx="7.2" cy="37.7" rx="2.7" ry="1.6" transform="rotate(60 7.2 37.7)" fill="#0b1622"/>
+</g>
+</g></defs>
+<use href="#t" xlink:href="#t" stroke="#0d1b2a" stroke-width="2.4" stroke-linejoin="round"/>
+<use href="#t" xlink:href="#t"/>
+<path d="m30.5 10.2-1.8 5.2 4.2 2.5-3.2 4 4.4 2.6-1.6 6.1" fill="none" stroke="#10233e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="m48 12 3-4m0 9 5-1" fill="none" stroke="#f7a82c" stroke-width="2.8" stroke-linecap="round"/>
+</svg>
