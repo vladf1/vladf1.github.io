@@ -40,7 +40,7 @@ There is also an external link to
 
 ## Local Development
 
-Install dependencies from the repository root:
+Use Node.js 26 LTS (v26.13.0 or later in the 26.x line) and install dependencies from the repository root.
 
 ```bash
 npm ci
