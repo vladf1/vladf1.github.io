@@ -4,7 +4,7 @@ A small, finished arcade game in a luminous 3D garden. Built with Three.js, stri
 
 ## Play
 
-Use Node.js 24 or newer. From the repository root:
+With Node.js 26 LTS, run these commands from the repository root.
 
 ```sh
 npm ci
